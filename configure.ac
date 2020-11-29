@@ -1666,6 +1666,7 @@ AC_CHECK_FUNCS(m4_normalize([
 	setproctitle
 	setproctitle_fast
 	setsid
+	shm_create_largepage
 	shm_open
 	strchrnul
 	strsignal

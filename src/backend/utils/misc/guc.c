@@ -11691,7 +11691,7 @@ check_maintenance_io_concurrency(int *newval, void **extra, GucSource source)
 static bool
 check_huge_page_size(int *newval, void **extra, GucSource source)
 {
-#if !(defined(MAP_HUGE_MASK) && defined(MAP_HUGE_SHIFT))
+#if !(defined(MAP_HUGE_MASK) && defined(MAP_HUGE_SHIFT)) && !defined(HAVE_SHM_CREATE_LARGEPAGE)
 	/* Recent enough Linux only, for now.  See GetHugePageSize(). */
 	if (*newval != 0)
 	{
