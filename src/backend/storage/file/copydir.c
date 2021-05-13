@@ -186,6 +186,20 @@ copy_file(char *fromfile, char *tofile)
 			flush_offset = offset;
 		}
 
+#ifdef HAVE_COPY_FILE_RANGE
+		pgstat_report_wait_start(WAIT_EVENT_COPY_FILE_WRITE);		/* XXX? */
+		nbytes = copy_file_range(srcfd, NULL, dstfd, NULL,
+								 COPY_BUF_SIZE, 0);
+		pgstat_report_wait_end();
+		if (nbytes < 0)
+			ereport(ERROR,
+					(errcode_for_file_access(),
+					 errmsg("could not copy from file \"%s\" to file \"%s\": %m",
+							fromfile, tofile)));
+		if (nbytes == 0)
+			break;
+		/* XXX: on Linux < 5.3, EXDEV could be reported, and we should fall back to the traditional coding? */
+#else
 		pgstat_report_wait_start(WAIT_EVENT_COPY_FILE_READ);
 		nbytes = read(srcfd, buffer, COPY_BUF_SIZE);
 		pgstat_report_wait_end();
@@ -207,6 +221,7 @@ copy_file(char *fromfile, char *tofile)
 					 errmsg("could not write to file \"%s\": %m", tofile)));
 		}
 		pgstat_report_wait_end();
+#endif
 	}
 
 	if (offset > flush_offset)
