@@ -1390,8 +1390,7 @@ internal_flush(void)
 			 * the connection.
 			 */
 			PqSendStart = PqSendPointer = 0;
-			ClientConnectionLost = 1;
-			InterruptPending = 1;
+			ProcSignalRaise(PROCSIG_CONNECTION_LOST);
 			return EOF;
 		}
 

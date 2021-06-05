@@ -32,7 +32,7 @@ volatile sig_atomic_t ShutdownRequestPending = false;
 void
 HandleMainLoopInterrupts(void)
 {
-	if (ProcSignalBarrierPending)
+	if (ProcSignalPending(PROCSIG_BARRIER))
 		ProcessProcSignalBarrier();
 
 	if (ConfigReloadPending)

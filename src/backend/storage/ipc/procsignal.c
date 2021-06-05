@@ -62,7 +62,9 @@
 typedef struct
 {
 	volatile pid_t pss_pid;
-	volatile sig_atomic_t pss_signalFlags[NUM_PROCSIGNALS];
+	volatile int pss_pgprocno;
+	volatile bool pss_signaled;		/* formerly InterruptPending */
+	volatile bool pss_signalFlags[NUM_PROCSIGNALS];
 	pg_atomic_uint64 pss_barrierGeneration;
 	pg_atomic_uint32 pss_barrierCheckMask;
 	ConditionVariable pss_barrierCV;
@@ -98,7 +100,6 @@ typedef struct
 static ProcSignalHeader *ProcSignal = NULL;
 static ProcSignalSlot *MyProcSignalSlot = NULL;
 
-static bool CheckProcSignal(ProcSignalReason reason);
 static void CleanupProcSignalState(int status, Datum arg);
 static void ResetProcSignalBarrierBits(uint32 flags);
 static bool ProcessBarrierPlaceholder(void);
@@ -142,7 +143,10 @@ ProcSignalShmemInit(void)
 			ProcSignalSlot *slot = &ProcSignal->psh_slot[i];
 
 			slot->pss_pid = 0;
-			MemSet(slot->pss_signalFlags, 0, sizeof(slot->pss_signalFlags));
+			slot->pss_pgprocno = 0;
+			slot->pss_signaled = false;
+			for (int j = 0; j < NUM_PROCSIGNALS; ++j)
+				slot->pss_signalFlags[j] = false;
 			pg_atomic_init_u64(&slot->pss_barrierGeneration, PG_UINT64_MAX);
 			pg_atomic_init_u32(&slot->pss_barrierCheckMask, 0);
 			ConditionVariableInit(&slot->pss_barrierCV);
@@ -173,7 +177,9 @@ ProcSignalInit(int pss_idx)
 			 MyProcPid, pss_idx);
 
 	/* Clear out any leftover signal reasons */
-	MemSet(slot->pss_signalFlags, 0, NUM_PROCSIGNALS * sizeof(sig_atomic_t));
+	slot->pss_signaled = false;
+	for (int i = 0; i < NUM_PROCSIGNALS; ++i)
+		slot->pss_signalFlags[i] = false;
 
 	/*
 	 * Initialize barrier state. Since we're a brand-new process, there
@@ -192,8 +198,9 @@ ProcSignalInit(int pss_idx)
 	pg_atomic_write_u64(&slot->pss_barrierGeneration, barrier_generation);
 	pg_memory_barrier();
 
-	/* Mark slot with my PID */
+	/* Mark slot with my procno, so my latch will be set for proc signals */
 	slot->pss_pid = MyProcPid;
+	slot->pss_pgprocno = MyProc->pgprocno;
 
 	/* Remember slot location for CheckProcSignal */
 	MyProcSignalSlot = slot;
@@ -225,14 +232,14 @@ CleanupProcSignalState(int status, Datum arg)
 	MyProcSignalSlot = NULL;
 
 	/* sanity check */
-	if (slot->pss_pid != MyProcPid)
+	if (slot->pss_pgprocno != MyProc->pgprocno)
 	{
 		/*
 		 * don't ERROR here. We're exiting anyway, and don't want to get into
 		 * infinite loop trying to exit
 		 */
 		elog(LOG, "process %d releasing ProcSignal slot %d, but it contains %d",
-			 MyProcPid, pss_idx, (int) slot->pss_pid);
+			 MyProcPid, pss_idx, slot->pss_pgprocno);
 		return;					/* XXX better to zero the slot anyway? */
 	}
 
@@ -244,6 +251,7 @@ CleanupProcSignalState(int status, Datum arg)
 	ConditionVariableBroadcast(&slot->pss_barrierCV);
 
 	slot->pss_pid = 0;
+	slot->pss_pgprocno = 0;
 }
 
 /*
@@ -276,10 +284,11 @@ SendProcSignal(pid_t pid, ProcSignalReason reason, BackendId backendId)
 		 */
 		if (slot->pss_pid == pid)
 		{
-			/* Atomically set the proper flag */
 			slot->pss_signalFlags[reason] = true;
-			/* Send signal */
-			return kill(pid, SIGUSR1);
+			pg_write_barrier();
+			slot->pss_signaled = true;
+			SetLatch(&ProcGlobal->allProcs[slot->pss_pgprocno].procLatch);
+			return 0;
 		}
 	}
 	else
@@ -299,11 +308,11 @@ SendProcSignal(pid_t pid, ProcSignalReason reason, BackendId backendId)
 			if (slot->pss_pid == pid)
 			{
 				/* the above note about race conditions applies here too */
-
-				/* Atomically set the proper flag */
 				slot->pss_signalFlags[reason] = true;
-				/* Send signal */
-				return kill(pid, SIGUSR1);
+				pg_write_barrier();
+				slot->pss_signaled = true;
+				SetLatch(&ProcGlobal->allProcs[slot->pss_pgprocno].procLatch);
+				return 0;
 			}
 		}
 	}
@@ -377,7 +386,9 @@ EmitProcSignalBarrier(ProcSignalBarrierType type)
 		{
 			/* see SendProcSignal for details */
 			slot->pss_signalFlags[PROCSIG_BARRIER] = true;
-			kill(pid, SIGUSR1);
+			pg_write_barrier();
+			slot->pss_signaled = true;
+			SetLatch(&ProcGlobal->allProcs[slot->pss_pgprocno].procLatch);
 		}
 	}
 
@@ -425,23 +436,6 @@ WaitForProcSignalBarrier(uint64 generation)
 }
 
 /*
- * Handle receipt of an interrupt indicating a global barrier event.
- *
- * All the actual work is deferred to ProcessProcSignalBarrier(), because we
- * cannot safely access the barrier generation inside the signal handler as
- * 64bit atomics might use spinlock based emulation, even for reads. As this
- * routine only gets called when PROCSIG_BARRIER is sent that won't cause a
- * lot of unnecessary work.
- */
-static void
-HandleProcSignalBarrierInterrupt(void)
-{
-	InterruptPending = true;
-	ProcSignalBarrierPending = true;
-	/* latch will be set by procsignal_sigusr1_handler */
-}
-
-/*
  * Perform global barrier related interrupt checking.
  *
  * Any backend that participates in ProcSignal signaling must arrange to
@@ -457,11 +451,6 @@ ProcessProcSignalBarrier(void)
 	volatile uint32 flags;
 
 	Assert(MyProcSignalSlot);
-
-	/* Exit quickly if there's no work to do. */
-	if (!ProcSignalBarrierPending)
-		return;
-	ProcSignalBarrierPending = false;
 
 	/*
 	 * It's not unlikely to process multiple barriers at once, before the
@@ -590,8 +579,7 @@ static void
 ResetProcSignalBarrierBits(uint32 flags)
 {
 	pg_atomic_fetch_or_u32(&MyProcSignalSlot->pss_barrierCheckMask, flags);
-	ProcSignalBarrierPending = true;
-	InterruptPending = true;
+	ProcSignalRaise(PROCSIG_BARRIER);
 }
 
 static bool
@@ -612,19 +600,33 @@ ProcessBarrierPlaceholder(void)
 	return true;
 }
 
-/*
- * CheckProcSignal - check to see if a particular reason has been
- * signaled, and clear the signal flag.  Should be called after receiving
- * SIGUSR1.
- */
-static bool
-CheckProcSignal(ProcSignalReason reason)
+void
+ProcSignalRaise(ProcSignalReason reason)
+{
+	volatile ProcSignalSlot *slot = MyProcSignalSlot;
+
+	if (slot)
+	{
+		slot->pss_signalFlags[reason] = true;
+		slot->pss_signaled = true;
+	}
+}
+
+bool
+ProcSignalPending(ProcSignalReason reason)
+{
+	volatile ProcSignalSlot *slot = MyProcSignalSlot;
+
+	return slot && slot->pss_signalFlags[reason];
+}
+
+bool
+ProcSignalConsume(ProcSignalReason reason)
 {
 	volatile ProcSignalSlot *slot = MyProcSignalSlot;
 
 	if (slot != NULL)
 	{
-		/* Careful here --- don't clear flag if we haven't seen it set */
 		if (slot->pss_signalFlags[reason])
 		{
 			slot->pss_signalFlags[reason] = false;
@@ -635,50 +637,44 @@ CheckProcSignal(ProcSignalReason reason)
 	return false;
 }
 
-/*
- * procsignal_sigusr1_handler - handle SIGUSR1 signal.
- */
+void
+ProcSignalClear(ProcSignalReason reason)
+{
+	volatile ProcSignalSlot *slot = MyProcSignalSlot;
+
+	if (slot)
+		slot->pss_signalFlags[reason] = false;
+}
+
+bool
+ProcSignalAnyPending(void)
+{
+	volatile ProcSignalSlot *slot = MyProcSignalSlot;
+
+	/* XXX make this static inline? */
+	/* XXX point to a dummy entry instead of using NULL to avoid a branch */
+	return slot && slot->pss_signaled;
+}
+
+void
+ProcSignalClearAnyPending(void)
+{
+	volatile ProcSignalSlot *slot = MyProcSignalSlot;
+
+	slot->pss_signaled = false;
+}
+
 void
 procsignal_sigusr1_handler(SIGNAL_ARGS)
 {
 	int			save_errno = errno;
 
-	if (CheckProcSignal(PROCSIG_CATCHUP_INTERRUPT))
-		HandleCatchupInterrupt();
-
-	if (CheckProcSignal(PROCSIG_NOTIFY_INTERRUPT))
-		HandleNotifyInterrupt();
-
-	if (CheckProcSignal(PROCSIG_PARALLEL_MESSAGE))
-		HandleParallelMessageInterrupt();
-
-	if (CheckProcSignal(PROCSIG_WALSND_INIT_STOPPING))
-		HandleWalSndInitStopping();
-
-	if (CheckProcSignal(PROCSIG_BARRIER))
-		HandleProcSignalBarrierInterrupt();
-
-	if (CheckProcSignal(PROCSIG_LOG_MEMORY_CONTEXT))
-		HandleLogMemoryContextInterrupt();
-
-	if (CheckProcSignal(PROCSIG_RECOVERY_CONFLICT_DATABASE))
-		RecoveryConflictInterrupt(PROCSIG_RECOVERY_CONFLICT_DATABASE);
-
-	if (CheckProcSignal(PROCSIG_RECOVERY_CONFLICT_TABLESPACE))
-		RecoveryConflictInterrupt(PROCSIG_RECOVERY_CONFLICT_TABLESPACE);
-
-	if (CheckProcSignal(PROCSIG_RECOVERY_CONFLICT_LOCK))
-		RecoveryConflictInterrupt(PROCSIG_RECOVERY_CONFLICT_LOCK);
-
-	if (CheckProcSignal(PROCSIG_RECOVERY_CONFLICT_SNAPSHOT))
-		RecoveryConflictInterrupt(PROCSIG_RECOVERY_CONFLICT_SNAPSHOT);
-
-	if (CheckProcSignal(PROCSIG_RECOVERY_CONFLICT_STARTUP_DEADLOCK))
-		RecoveryConflictInterrupt(PROCSIG_RECOVERY_CONFLICT_STARTUP_DEADLOCK);
-
-	if (CheckProcSignal(PROCSIG_RECOVERY_CONFLICT_BUFFERPIN))
-		RecoveryConflictInterrupt(PROCSIG_RECOVERY_CONFLICT_BUFFERPIN);
-
+	/*
+	 * XXX Handling of "procsignals" moved to shared memory + latch, but there
+	 * is one remaining reason we need this signal handler: the postmaster.c
+	 * sends raw signals when bgworker states change.  That should really
+	 * change to latches...
+	 */
 	SetLatch(MyLatch);
 
 	errno = save_errno;

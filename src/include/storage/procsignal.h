@@ -36,6 +36,14 @@ typedef enum
 	PROCSIG_BARRIER,			/* global barrier interrupt  */
 	PROCSIG_LOG_MEMORY_CONTEXT, /* ask backend to log the memory contexts */
 
+	PROCSIG_IDLE_SESSION_TIMEOUT,
+	PROCSIG_IDLE_TRANSACTION_TIMEOUT,
+	PROCSIG_CHECK_CONNECTION_TIMEOUT,
+	PROCSIG_CONNECTION_LOST,
+	PROCSIG_QUERY_CANCEL,
+	PROCSIG_DIE,
+	PROCSIG_RECOVERY_CONFLICT,
+
 	/* Recovery conflict reasons */
 	PROCSIG_RECOVERY_CONFLICT_DATABASE,
 	PROCSIG_RECOVERY_CONFLICT_TABLESPACE,
@@ -70,6 +78,13 @@ extern int	SendProcSignal(pid_t pid, ProcSignalReason reason,
 extern uint64 EmitProcSignalBarrier(ProcSignalBarrierType type);
 extern void WaitForProcSignalBarrier(uint64 generation);
 extern void ProcessProcSignalBarrier(void);
+
+extern bool ProcSignalAnyPending(void);
+extern void ProcSignalClearAnyPending(void);
+extern bool ProcSignalPending(ProcSignalReason reason);
+extern bool ProcSignalConsume(ProcSignalReason reason);
+extern void ProcSignalClear(ProcSignalReason reason);
+extern void ProcSignalRaise(ProcSignalReason reason);
 
 extern void procsignal_sigusr1_handler(SIGNAL_ARGS);
 

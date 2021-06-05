@@ -385,7 +385,8 @@ dsm_impl_posix_resize(int fd, off_t size)
 		do
 		{
 			rc = posix_fallocate(fd, 0, size);
-		} while (rc == EINTR && !(ProcDiePending || QueryCancelPending));
+		} while (rc == EINTR && !(ProcSignalPending(PROCSIG_DIE) ||
+								  ProcSignalPending(PROCSIG_QUERY_CANCEL)));
 		pgstat_report_wait_end();
 
 		/*

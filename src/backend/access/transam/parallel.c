@@ -993,21 +993,6 @@ ParallelContextActive(void)
 }
 
 /*
- * Handle receipt of an interrupt indicating a parallel worker message.
- *
- * Note: this is called within a signal handler!  All we can do is set
- * a flag that will cause the next CHECK_FOR_INTERRUPTS() to invoke
- * HandleParallelMessages().
- */
-void
-HandleParallelMessageInterrupt(void)
-{
-	InterruptPending = true;
-	ParallelMessagePending = true;
-	SetLatch(MyLatch);
-}
-
-/*
  * Handle any queued protocol messages received from parallel workers.
  */
 void

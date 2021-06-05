@@ -2437,7 +2437,9 @@ rfree(regex_t *re)
 static int
 rcancelrequested(void)
 {
-	return InterruptPending && (QueryCancelPending || ProcDiePending);
+	return ProcSignalAnyPending() &&
+		(ProcSignalPending(PROCSIG_QUERY_CANCEL) ||
+		 ProcSignalPending(PROCSIG_DIE));
 }
 
 /*

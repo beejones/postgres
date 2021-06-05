@@ -27,21 +27,6 @@ uint64		SharedInvalidMessageCounter;
 
 
 /*
- * Because backends sitting idle will not be reading sinval events, we
- * need a way to give an idle backend a swift kick in the rear and make
- * it catch up before the sinval queue overflows and forces it to go
- * through a cache reset exercise.  This is done by sending
- * PROCSIG_CATCHUP_INTERRUPT to any backend that gets too far behind.
- *
- * The signal handler will set an interrupt pending flag and will set the
- * processes latch. Whenever starting to read from the client, or when
- * interrupted while doing so, ProcessClientReadInterrupt() will call
- * ProcessCatchupEvent().
- */
-volatile sig_atomic_t catchupInterruptPending = false;
-
-
-/*
  * SendSharedInvalidMessages
  *	Add shared-cache-invalidation message(s) to the global SI message queue.
  */
@@ -134,36 +119,11 @@ ReceiveSharedInvalidMessages(void (*invalFunction) (SharedInvalidationMessage *m
 	 * catchup signal this way avoids creating spikes in system load for what
 	 * should be just a background maintenance activity.
 	 */
-	if (catchupInterruptPending)
+	if (ProcSignalConsume(PROCSIG_CATCHUP_INTERRUPT))
 	{
-		catchupInterruptPending = false;
 		elog(DEBUG4, "sinval catchup complete, cleaning queue");
 		SICleanupQueue(false, 0);
 	}
-}
-
-
-/*
- * HandleCatchupInterrupt
- *
- * This is called when PROCSIG_CATCHUP_INTERRUPT is received.
- *
- * We used to directly call ProcessCatchupEvent directly when idle. These days
- * we just set a flag to do it later and notify the process of that fact by
- * setting the process's latch.
- */
-void
-HandleCatchupInterrupt(void)
-{
-	/*
-	 * Note: this is called by a SIGNAL HANDLER. You must be very wary what
-	 * you do here.
-	 */
-
-	catchupInterruptPending = true;
-
-	/* make sure the event is processed in due course */
-	SetLatch(MyLatch);
 }
 
 /*
@@ -175,7 +135,7 @@ HandleCatchupInterrupt(void)
 void
 ProcessCatchupInterrupt(void)
 {
-	while (catchupInterruptPending)
+	while (ProcSignalPending(PROCSIG_CATCHUP_INTERRUPT))
 	{
 		/*
 		 * What we need to do here is cause ReceiveSharedInvalidMessages() to

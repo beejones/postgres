@@ -1842,29 +1842,6 @@ AtSubAbort_Notify(void)
 }
 
 /*
- * HandleNotifyInterrupt
- *
- *		Signal handler portion of interrupt handling. Let the backend know
- *		that there's a pending notify interrupt. If we're currently reading
- *		from the client, this will interrupt the read and
- *		ProcessClientReadInterrupt() will call ProcessNotifyInterrupt().
- */
-void
-HandleNotifyInterrupt(void)
-{
-	/*
-	 * Note: this is called by a SIGNAL HANDLER. You must be very wary what
-	 * you do here.
-	 */
-
-	/* signal that work needs to be done */
-	notifyInterruptPending = true;
-
-	/* make sure the event is processed in due course */
-	SetLatch(MyLatch);
-}
-
-/*
  * ProcessNotifyInterrupt
  *
  *		This is called if we see notifyInterruptPending set, just before
@@ -1886,7 +1863,7 @@ ProcessNotifyInterrupt(bool flush)
 		return;					/* not really idle */
 
 	/* Loop in case another signal arrives while sending messages */
-	while (notifyInterruptPending)
+	while (ProcSignalConsume(PROCSIG_NOTIFY_INTERRUPT))
 		ProcessIncomingNotify(flush);
 }
 
@@ -2236,9 +2213,6 @@ asyncQueueAdvanceTail(void)
 static void
 ProcessIncomingNotify(bool flush)
 {
-	/* We *must* reset the flag */
-	notifyInterruptPending = false;
-
 	/* Do nothing else if we aren't actively listening */
 	if (listenChannels == NIL)
 		return;

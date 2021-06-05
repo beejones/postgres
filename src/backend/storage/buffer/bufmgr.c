@@ -2001,7 +2001,7 @@ BufferSync(int flags)
 		UnlockBufHdr(bufHdr, buf_state);
 
 		/* Check for barrier events in case NBuffers is large. */
-		if (ProcSignalBarrierPending)
+		if (ProcSignalConsume(PROCSIG_BARRIER))
 			ProcessProcSignalBarrier();
 	}
 
@@ -2082,7 +2082,7 @@ BufferSync(int flags)
 		s->num_to_scan++;
 
 		/* Check for barrier events. */
-		if (ProcSignalBarrierPending)
+		if (ProcSignalConsume(PROCSIG_BARRIER))
 			ProcessProcSignalBarrier();
 	}
 
