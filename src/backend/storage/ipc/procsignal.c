@@ -663,19 +663,3 @@ ProcSignalClearAnyPending(void)
 
 	slot->pss_signaled = false;
 }
-
-void
-procsignal_sigusr1_handler(SIGNAL_ARGS)
-{
-	int			save_errno = errno;
-
-	/*
-	 * XXX Handling of "procsignals" moved to shared memory + latch, but there
-	 * is one remaining reason we need this signal handler: the postmaster.c
-	 * sends raw signals when bgworker states change.  That should really
-	 * change to latches...
-	 */
-	SetLatch(MyLatch);
-
-	errno = save_errno;
-}

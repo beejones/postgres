@@ -86,6 +86,4 @@ extern bool ProcSignalConsume(ProcSignalReason reason);
 extern void ProcSignalClear(ProcSignalReason reason);
 extern void ProcSignalRaise(ProcSignalReason reason);
 
-extern void procsignal_sigusr1_handler(SIGNAL_ARGS);
-
 #endif							/* PROCSIGNAL_H */

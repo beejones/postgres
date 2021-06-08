@@ -4057,7 +4057,7 @@ PostgresMain(const char *dbname, const char *username)
 		 * midst of output during who-knows-what operation...
 		 */
 		pqsignal(SIGPIPE, SIG_IGN);
-		pqsignal(SIGUSR1, procsignal_sigusr1_handler); /* XXX which, see */
+		pqsignal(SIGUSR1, SIG_IGN); //procsignal_sigusr1_handler); /* XXX which, see */
 		pqsignal(SIGUSR2, SIG_IGN);
 		pqsignal(SIGFPE, FloatExceptionHandler);
 
