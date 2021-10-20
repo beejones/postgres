@@ -837,7 +837,7 @@ HandleAutoVacLauncherInterrupts(void)
 		ProcessProcSignalBarrier();
 
 	/* Perform logging of memory contexts of this process */
-	if (LogMemoryContextPending)
+	if (ProcSignalPending(PROCSIG_LOG_MEMORY_CONTEXT))
 		ProcessLogMemoryContextInterrupt();
 
 	/* Process sinval catchup interrupts that happened while sleeping */

@@ -707,7 +707,7 @@ pgarch_die(int code, Datum arg)
 static void
 HandlePgArchInterrupts(void)
 {
-	if (ProcSignalBarrierPending)
+	if (ProcSignalPending(PROCSIG_BARRIER))
 		ProcessProcSignalBarrier();
 
 	if (ConfigReloadPending)
