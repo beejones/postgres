@@ -270,6 +270,9 @@ typedef struct WritebackContext
 	/* current number of pending writeback requests */
 	int			nr_pending;
 
+	/* smgrrelease() count for this backend, before anything is scheduled */
+	uint64		smgr_release_count;
+
 	/* pending requests */
 	PendingWriteback pending_writebacks[WRITEBACK_MAX_PENDING_FLUSHES];
 } WritebackContext;

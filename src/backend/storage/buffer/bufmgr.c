@@ -4873,6 +4873,7 @@ WritebackContextInit(WritebackContext *context, int *max_pending)
 
 	context->max_pending = max_pending;
 	context->nr_pending = 0;
+	context->smgr_release_count = smgrreleaseallcount();
 }
 
 /*
@@ -4923,6 +4924,18 @@ void
 IssuePendingWritebacks(WritebackContext *context)
 {
 	int			i;
+
+	/*
+	 * Throw away the contents if smgrreleaseall() has been invoked since
+	 * "context" was initialized or cleared.  Since the main loop below doesn't
+	 * check for interrupts or otherwise handle barrier requests, we don't have
+	 * to worry about invalidation if we get past this check.
+	 */
+	if (context->smgr_release_count != smgrreleaseallcount())
+	{
+		context->nr_pending = 0;
+		context->smgr_release_count = smgrreleaseallcount();
+	}
 
 	if (context->nr_pending == 0)
 		return;
@@ -4983,6 +4996,7 @@ IssuePendingWritebacks(WritebackContext *context)
 	}
 
 	context->nr_pending = 0;
+	context->smgr_release_count = smgrreleaseallcount();
 }
 
 

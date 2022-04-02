@@ -549,12 +549,6 @@ mdclose(SMgrRelation reln, ForkNumber forknum)
 	}
 }
 
-void
-mdrelease(void)
-{
-	closeAllVfds();
-}
-
 /*
  *	mdprefetch() -- Initiate asynchronous read of the specified block of a relation
  */
