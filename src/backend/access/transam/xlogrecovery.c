@@ -2221,7 +2221,7 @@ xlog_block_info(StringInfo buf, XLogReaderState *record)
 		BlockNumber blk;
 
 		if (!XLogRecGetBlockTagExtended(record, block_id,
-										&rlocator, &forknum, &blk, NULL))
+										&rlocator, &forknum, &blk, NULL, NULL))
 			continue;
 
 		if (forknum != MAIN_FORKNUM)
@@ -2354,7 +2354,7 @@ verifyBackupPageConsistency(XLogReaderState *record)
 		Page		page;
 
 		if (!XLogRecGetBlockTagExtended(record, block_id,
-										&rlocator, &forknum, &blkno, NULL))
+										&rlocator, &forknum, &blkno, NULL, NULL))
 		{
 			/*
 			 * WAL record doesn't contain a block reference with the given id.
@@ -2380,8 +2380,7 @@ verifyBackupPageConsistency(XLogReaderState *record)
 		 * temporary page.
 		 */
 		buf = XLogReadBufferExtended(rlocator, forknum, blkno,
-									 RBM_NORMAL_NO_LOG,
-									 InvalidBuffer);
+									 RBM_NORMAL_NO_LOG);
 		if (!BufferIsValid(buf))
 			continue;
 
