@@ -43,6 +43,10 @@
 #ifdef HAVE_SYS_EVENT_H
 #include <sys/event.h>
 #endif
+#ifdef HAVE_SYS_POLLSET_H
+#include <sys/poll.h>
+#include <sys/pollset.h>
+#endif
 #ifdef HAVE_SYS_SIGNALFD_H
 #include <sys/signalfd.h>
 #endif
@@ -70,12 +74,15 @@
  * define somewhere before this block.
  */
 #if defined(WAIT_USE_EPOLL) || defined(WAIT_USE_POLL) || \
-	defined(WAIT_USE_KQUEUE) || defined(WAIT_USE_WIN32)
+	defined(WAIT_USE_KQUEUE) || defined(WAIT_USE_WIN32) || \
+	defined(WAIT_USE_POLLSET)
 /* don't overwrite manual choice */
 #elif defined(HAVE_SYS_EPOLL_H)
 #define WAIT_USE_EPOLL
 #elif defined(HAVE_KQUEUE)
 #define WAIT_USE_KQUEUE
+#elif defined(HAVE_POLLSET_H)
+#define WAIT_USE_POLLSET
 #elif defined(HAVE_POLL)
 #define WAIT_USE_POLL
 #elif WIN32
@@ -98,6 +105,11 @@
 #else
 #define WAIT_USE_SELF_PIPE
 #endif
+#endif
+
+/* For AIX pollset, we need a self-pipe. */
+#if defined(WAIT_USE_POLLSET)
+#define WAIT_USE_SELF_PIPE
 #endif
 
 /* typedef in latch.h */
@@ -137,6 +149,9 @@ struct WaitEventSet
 	/* kevent returns events in a user provided arrays, allocate once */
 	struct kevent *kqueue_ret_events;
 	bool		report_postmaster_not_running;
+#elif defined(WAIT_USE_POLLSET)
+	pollset_t	pollset_fd;
+	struct pollfd_ext *pollset_ret_events;
 #elif defined(WAIT_USE_POLL)
 	/* poll expects events to be waited on every poll() call, prepare once */
 	struct pollfd *pollfds;
@@ -188,6 +203,8 @@ static void drain(void);
 static void WaitEventAdjustEpoll(WaitEventSet *set, WaitEvent *event, int action);
 #elif defined(WAIT_USE_KQUEUE)
 static void WaitEventAdjustKqueue(WaitEventSet *set, WaitEvent *event, int old_events);
+#elif defined(WAIT_USE_POLLSET)
+static void WaitEventAdjustPollset(WaitEventSet *set, WaitEvent *event, int action);
 #elif defined(WAIT_USE_POLL)
 static void WaitEventAdjustPoll(WaitEventSet *set, WaitEvent *event);
 #elif defined(WAIT_USE_WIN32)
@@ -723,6 +740,8 @@ CreateWaitEventSet(MemoryContext context, int nevents)
 	sz += MAXALIGN(sizeof(struct epoll_event) * nevents);
 #elif defined(WAIT_USE_KQUEUE)
 	sz += MAXALIGN(sizeof(struct kevent) * nevents);
+#elif defined(WAIT_USE_POLLSET)
+	sz += MAXALIGN(sizeof(struct pollfd_ext) * nevents);
 #elif defined(WAIT_USE_POLL)
 	sz += MAXALIGN(sizeof(struct pollfd) * nevents);
 #elif defined(WAIT_USE_WIN32)
@@ -744,6 +763,9 @@ CreateWaitEventSet(MemoryContext context, int nevents)
 #elif defined(WAIT_USE_KQUEUE)
 	set->kqueue_ret_events = (struct kevent *) data;
 	data += MAXALIGN(sizeof(struct kevent) * nevents);
+#elif defined(WAIT_USE_POLLSET)
+	set->pollset_ret_events = (struct pollfd_ext *) data;
+	data += MAXALIGN(sizeof(struct pollfd_ext) * nevents);
 #elif defined(WAIT_USE_POLL)
 	set->pollfds = (struct pollfd *) data;
 	data += MAXALIGN(sizeof(struct pollfd) * nevents);
@@ -790,6 +812,18 @@ CreateWaitEventSet(MemoryContext context, int nevents)
 		elog(ERROR, "fcntl(F_SETFD) failed on kqueue descriptor: %m");
 	}
 	set->report_postmaster_not_running = false;
+#elif defined(WAIT_USE_POLLSET)
+	if (!AcquireExternalFD())
+	{
+		/* treat this as though pollset_create itself returned EMFILE */
+		elog(ERROR, "pollset_create failed: %m");
+	}
+	set->pollset_fd = pollset_create(nevents);
+	if (set->pollset_fd < 0)
+	{
+		ReleaseExternalFD();
+		elog(ERROR, "pollset_create failed: %m");
+	}
 #elif defined(WAIT_USE_WIN32)
 
 	/*
@@ -825,6 +859,9 @@ FreeWaitEventSet(WaitEventSet *set)
 	ReleaseExternalFD();
 #elif defined(WAIT_USE_KQUEUE)
 	close(set->kqueue_fd);
+	ReleaseExternalFD();
+#elif defined(WAIT_USE_POLLSET)
+	pollset_destroy(set->pollset_fd);
 	ReleaseExternalFD();
 #elif defined(WAIT_USE_WIN32)
 	WaitEvent  *cur_event;
@@ -952,6 +989,8 @@ AddWaitEventToSet(WaitEventSet *set, uint32 events, pgsocket fd, Latch *latch,
 	WaitEventAdjustEpoll(set, event, EPOLL_CTL_ADD);
 #elif defined(WAIT_USE_KQUEUE)
 	WaitEventAdjustKqueue(set, event, 0);
+#elif defined(WAIT_USE_POLLSET)
+	WaitEventAdjustPollset(set, event, PS_ADD);
 #elif defined(WAIT_USE_POLL)
 	WaitEventAdjustPoll(set, event);
 #elif defined(WAIT_USE_WIN32)
@@ -1032,6 +1071,8 @@ ModifyWaitEvent(WaitEventSet *set, int pos, uint32 events, Latch *latch)
 	WaitEventAdjustEpoll(set, event, EPOLL_CTL_MOD);
 #elif defined(WAIT_USE_KQUEUE)
 	WaitEventAdjustKqueue(set, event, old_events);
+#elif defined(WAIT_USE_POLLSET)
+	WaitEventAdjustPollset(set, event, PS_REPLACE);
 #elif defined(WAIT_USE_POLL)
 	WaitEventAdjustPoll(set, event);
 #elif defined(WAIT_USE_WIN32)
@@ -1093,6 +1134,55 @@ WaitEventAdjustEpoll(WaitEventSet *set, WaitEvent *event, int action)
 						"epoll_ctl")));
 }
 #endif
+
+#if defined(WAIT_USE_POLLSET)
+/*
+ * action can be one of PS_ADD | PS_REPLACE.
+ */
+static void
+WaitEventAdjustPollset(WaitEventSet *set, WaitEvent *event, int action)
+{
+	struct poll_ctl_ext ctl;
+	int			events;
+	int			rc;
+
+
+	events = POLLERR | POLLHUP;
+
+	/* prepare pollfd entry once */
+	if (event->events == WL_LATCH_SET)
+	{
+		Assert(set->latch != NULL);
+		events |= POLLIN;
+	}
+	else if (event->events == WL_POSTMASTER_DEATH)
+	{
+		events |= POLLIN;
+	}
+	else
+	{
+		Assert(event->fd != PGINVALID_SOCKET);
+		Assert(event->events & (WL_SOCKET_READABLE |
+								WL_SOCKET_WRITEABLE |
+								WL_SOCKET_CLOSED));
+
+		if (event->events & WL_SOCKET_READABLE)
+			events |= POLLIN;
+		if (event->events & WL_SOCKET_WRITEABLE)
+			events |= POLLOUT;
+	}
+
+	POLL_CTL_EXT_INIT_V1(&ctl, action, events, event->fd, event);
+	rc = poll_ctl_ext(set->pollset_fd, &ctl, 1);
+
+	if (rc < 0)
+		ereport(ERROR,
+				(errcode_for_socket_access(),
+				 errmsg("%s() failed: %m",
+						"poll_ctl_ext")));
+}
+#endif
+
 
 #if defined(WAIT_USE_POLL)
 static void
@@ -1739,6 +1829,114 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 
 			if ((cur_event->events & WL_SOCKET_WRITEABLE) &&
 				(cur_kqueue_event->filter == EVFILT_WRITE))
+			{
+				/* writable, or EOF */
+				occurred_events->events |= WL_SOCKET_WRITEABLE;
+			}
+
+			if (occurred_events->events != 0)
+			{
+				occurred_events->fd = cur_event->fd;
+				occurred_events++;
+				returned_events++;
+			}
+		}
+	}
+
+	return returned_events;
+}
+
+#elif defined(WAIT_USE_POLLSET)
+
+/*
+ * Wait using AIX's pollset API.
+ */
+static inline int
+WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
+					  WaitEvent *occurred_events, int nevents)
+{
+	int			returned_events = 0;
+	int			rc;
+	WaitEvent  *cur_event;
+	struct pollfd_ext *curr_pollset_event;
+
+	/* Sleep */
+	rc = pollset_poll_ext(set->pollset_fd, set->pollset_ret_events, nevents,
+						  cur_timeout);
+
+	/* Check return code */
+	if (rc < 0)
+	{
+		/* EINTR is okay, otherwise complain */
+		if (errno != EINTR)
+		{
+			waiting = false;
+			ereport(ERROR,
+					(errcode_for_socket_access(),
+					 errmsg("%s() failed: %m",
+							"pollset_poll_ext")));
+		}
+		return 0;
+	}
+	else if (rc == 0)
+	{
+		/* timeout exceeded */
+		return -1;
+	}
+
+	for (cur_pollset_event = set->pollset_ret_events;
+		 cur_pollset_event < (set->pollset_ret_events + rc) &&
+		 returned_events < nevents;
+		 cur_pollset_event++)
+	{
+		/* epoll's data pointer is set to the associated WaitEvent */
+		cur_event = (WaitEvent *) cur_pollset_event->data.ptr;
+
+		occurred_events->pos = cur_event->pos;
+		occurred_events->user_data = cur_event->user_data;
+		occurred_events->events = 0;
+
+		if (cur_event->events == WL_LATCH_SET &&
+			cur_pollset_event->events & (EPOLLIN | EPOLLERR | EPOLLHUP))
+		{
+			/* Drain the signalfd. */
+			drain();
+
+			if (set->latch && set->latch->is_set)
+			{
+				occurred_events->fd = PGINVALID_SOCKET;
+				occurred_events->events = WL_LATCH_SET;
+				occurred_events++;
+				returned_events++;
+			}
+		}
+		else if (cur_event->events == WL_POSTMASTER_DEATH &&
+				 cur_pollset_event->events & (EPOLLIN | EPOLLERR | EPOLLHUP))
+		{
+			if (!PostmasterIsAliveInternal())
+			{
+				if (set->exit_on_postmaster_death)
+					proc_exit(1);
+				occurred_events->fd = PGINVALID_SOCKET;
+				occurred_events->events = WL_POSTMASTER_DEATH;
+				occurred_events++;
+				returned_events++;
+			}
+		}
+		else if (cur_event->events & (WL_SOCKET_READABLE |
+									  WL_SOCKET_WRITEABLE))
+		{
+			Assert(cur_event->fd != PGINVALID_SOCKET);
+
+			if ((cur_event->events & WL_SOCKET_READABLE) &&
+				(cur_pollset_event->events & (POLLIN | POLLERR | POLLHUP)))
+			{
+				/* data available in socket, or EOF */
+				occurred_events->events |= WL_SOCKET_READABLE;
+			}
+
+			if ((cur_event->events & WL_SOCKET_WRITEABLE) &&
+				(cur_pollset_event->events & (POLLOUT | POLLERR | POLLHUP)))
 			{
 				/* writable, or EOF */
 				occurred_events->events |= WL_SOCKET_WRITEABLE;
