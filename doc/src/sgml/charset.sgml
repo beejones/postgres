@@ -90,7 +90,7 @@ initdb --locale=sv_SE
     For example, <literal>sv-SE</literal> represents Swedish as spoken in Sweden.
     Windows also supports more verbose locale names based on English words,
     such as <literal>German_Germany</literal> or <literal>Swedish_Sweden.1252</literal>,
-    but these are not recommended.
+    but these should not be used in PostgreSQL.
    </para>
 
    <para>
