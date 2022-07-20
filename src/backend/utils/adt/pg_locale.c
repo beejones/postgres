@@ -1496,14 +1496,36 @@ get_collation_actual_version(char collprovider, const char *collcollate)
 #elif defined(WIN32)
 		NLSVERSIONINFOEX version = {sizeof(NLSVERSIONINFOEX)};
 		WCHAR		wide_collcollate[LOCALE_NAME_MAX_LENGTH];
+		char		copy_collcollate[LOCALE_NAME_MAX_LENGTH];
 
-		MultiByteToWideChar(CP_ACP, 0, collcollate, -1, wide_collcollate,
+		/* Trim off encoding, if there is one */
+		strlcpy(copy_collcollate, collcollate, sizeof(copy_collcollate));
+		for (char *p = copy_collcollate; *p; ++p)
+		{
+			if (*p == '.')
+			{
+				*p = 0;
+				break;
+			}
+		}
+		MultiByteToWideChar(CP_ACP, 0, copy_collcollate, -1, wide_collcollate,
 							LOCALE_NAME_MAX_LENGTH);
 		if (!GetNLSVersionEx(COMPARE_STRING, wide_collcollate, &version))
+		{
+			/*
+			 * It's possible that old format locale names like "English_United
+			 * States.1252" could arrive here via pg_upgrade.  Those aren't
+			 * accepted by GetNLSVersionEx(), so we have to tolerate failure
+			 * and report "no version".
+			 */
+			if (GetLastError() == ERROR_INVALID_PARAMETER)
+				return NULL;
+
 			ereport(ERROR,
 					(errmsg("could not get collation version for locale \"%s\": error code %lu",
 							collcollate,
 							GetLastError())));
+		}
 		collversion = psprintf("%ld.%ld,%ld.%ld",
 							   (version.dwNLSVersion >> 8) & 0xFFFF,
 							   version.dwNLSVersion & 0xFF,
