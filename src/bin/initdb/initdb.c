@@ -2040,7 +2040,9 @@ check_locale_name(int category, const char *locale, char **canonname)
 								LOCALE_NAME_MAX_LENGTH, NULL, NULL) == 0)
 			pg_fatal("failed to convert locale name: error code %lu",
 					 GetLastError());
-		locale_copy = pg_strdup(name);
+		/* default to UTF-8, no matter what the system default codepage is */
+		locale_copy = pg_malloc(strlen(name) + sizeof(".UTF-8") + 1);
+		sprintf(locale_copy, "%s.UTF-8", name);
 #else
 		/* use environment to find the default */
 		locale_copy = pg_strdup("");
