@@ -456,6 +456,57 @@ task:
       path: "crashlog-*.txt"
       type: text/plain
 
+task:
+  name: Windows - Cygwin
+
+  env:
+    CPUS: 4
+    BUILD_JOBS: 4
+    TEST_JOBS: 8
+
+  #only_if: $CIRRUS_CHANGE_MESSAGE =~ '.*\nci-os-only:[^\n]*cygwin.*'
+
+  windows_container:
+    image: cirrusci/windowsservercore:2019
+    os_version: 2019
+    cpu: $CPUS
+    memory: 4G
+
+  ccache_cache:
+    folder: C:\tools\cygwin\tmp\ccache
+
+  sysinfo_script: |
+    chcp
+    systeminfo
+    powershell -Command get-psdrive -psprovider filesystem
+    set
+
+  setup_additional_packages_script: |
+    choco install -y --no-progress cygwin
+    C:\tools\cygwin\cygwinsetup.exe -q -P cygrunsrv,make,gcc-core,ccache,binutils,libtool,pkg-config,flex,bison,zlib-devel,libssl-devel,libreadline-devel,perl,perl-IPC-Run
+    C:\tools\cygwin\bin\bash.exe --login -c "cygserver-config -y" || EXIT /b 1
+    C:\tools\cygwin\bin\bash.exe --login -c "echo 'kern.ipc.semmni 1024' >> /etc/cygserver.conf" || EXIT /b 1
+    C:\tools\cygwin\bin\bash.exe --login -c "echo 'kern.ipc.semmns 1024' >> /etc/cygserver.conf" || EXIT /b 1
+    C:\tools\cygwin\bin\bash.exe --login -c "net start cygserver" || EXIT /b 1
+
+  configure_script:
+    - C:\tools\cygwin\bin\bash.exe --login -c "cd '%cd%' && CCACHE_DIR=/tmp/ccache ./configure --enable-cassert --enable-debug --enable-tap-tests CC='ccache gcc'" || EXIT /b 1
+
+  build_script:
+    - C:\tools\cygwin\bin\bash.exe --login -c "cd '%cd%' && CCACHE_DIR=/tmp/ccache make -s -j4 world-bin" || EXIT /b 1
+
+  test_world_script:
+    - C:\tools\cygwin\bin\bash.exe --login -c "cd '%cd%' && CCACHE_DIR=/tmp/ccache make -s -j1 check-world -Otarget" || EXIT /b 1
+
+  on_failure:
+    <<: *on_failure
+    crashlog_artifacts:
+      path: "crashlog-*.txt"
+      type: text/plain
+
+  always:
+    upload_caches: ccache
+
 
 task:
   name: CompilerWarnings
