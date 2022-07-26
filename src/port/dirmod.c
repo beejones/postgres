@@ -6,8 +6,10 @@
  * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- *	This includes replacement versions of functions that work on
- *	Win32 (NT4 and newer).
+ *	This includes replacement versions of functions that work on Windows.
+ *	For Cygwin, the purpose of these replacements is to provide retry loops
+ *	around POSIX functions.  For native Windows, we also redirect to
+ *	native Windows APIs.
  *
  * IDENTIFICATION
  *	  src/port/dirmod.c
@@ -21,25 +23,24 @@
 #include "postgres_fe.h"
 #endif
 
+#if defined(WIN32) && defined(__CYGWIN__)
+#error "WIN32 should not be defined at the same time as __CYGWIN__"
+#endif
+
+#if !defined(WIN32) && !defined(__CYGWIN__)
+#error "one of WIN32 or __CYGWIN__ is expected"
+#endif
+
 /* Don't modify declarations in system headers */
-#if defined(WIN32) || defined(__CYGWIN__)
 #undef rename
 #undef unlink
-#endif
 
 #include <unistd.h>
 #include <sys/stat.h>
 
-#if defined(WIN32) || defined(__CYGWIN__)
-#ifndef __CYGWIN__
+#if defined(WIN32)
 #include <winioctl.h>
-#else
-#include <windows.h>
-#include <w32api/winioctl.h>
 #endif
-#endif
-
-#if defined(WIN32) || defined(__CYGWIN__)
 
 /*
  *	pgrename
@@ -56,24 +57,24 @@ pgrename(const char *from, const char *to)
 	 * someone else to close the file, as the caller might be holding locks
 	 * and blocking other backends.
 	 */
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(WIN32)
 	while (!MoveFileEx(from, to, MOVEFILE_REPLACE_EXISTING))
 #else
 	while (rename(from, to) < 0)
 #endif
 	{
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(WIN32)
 		DWORD		err = GetLastError();
 
 		_dosmaperr(err);
 
 		/*
-		 * Modern NT-based Windows versions return ERROR_SHARING_VIOLATION if
-		 * another process has the file open without FILE_SHARE_DELETE.
-		 * ERROR_LOCK_VIOLATION has also been seen with some anti-virus
-		 * software. This used to check for just ERROR_ACCESS_DENIED, so
-		 * presumably you can get that too with some OS versions. We don't
-		 * expect real permission errors where we currently use rename().
+		 * Windows returns ERROR_SHARING_VIOLATION if another process has the
+		 * file open without FILE_SHARE_DELETE.  ERROR_LOCK_VIOLATION has also
+		 * been seen with some anti-virus software. This used to check for
+		 * just ERROR_ACCESS_DENIED, so presumably you can get that too with
+		 * some OS versions. We don't expect real permission errors where we
+		 * currently use rename().
 		 */
 		if (err != ERROR_ACCESS_DENIED &&
 			err != ERROR_SHARING_VIOLATION &&
@@ -121,10 +122,9 @@ pgunlink(const char *path)
 /* We undefined these above; now redefine for possible use below */
 #define rename(from, to)		pgrename(from, to)
 #define unlink(path)			pgunlink(path)
-#endif							/* defined(WIN32) || defined(__CYGWIN__) */
 
 
-#if defined(WIN32) && !defined(__CYGWIN__)	/* Cygwin has its own symlinks */
+#if defined(WIN32)
 
 /*
  *	pgsymlink support:
@@ -352,4 +352,4 @@ pgwin32_is_junction(const char *path)
 	}
 	return ((attr & FILE_ATTRIBUTE_REPARSE_POINT) == FILE_ATTRIBUTE_REPARSE_POINT);
 }
-#endif							/* defined(WIN32) && !defined(__CYGWIN__) */
+#endif							/* defined(WIN32) */

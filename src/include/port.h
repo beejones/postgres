@@ -18,10 +18,12 @@
 /*
  * Windows has enough specialized port stuff that we push most of it off
  * into another file.
- * Note: Some CYGWIN includes might #define WIN32.
  */
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(WIN32)
 #include "port/win32_port.h"
+#if defined(__CYGWIN__)
+#error "__CYGWIN__ should not be defined at the same time as WIN32"
+#endif
 #endif
 
 /* socket has a different definition on WIN32 */
@@ -150,7 +152,7 @@ extern int	pg_disable_aslr(void);
 #define EXE ""
 #endif
 
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(WIN32)
 #define DEVNULL "nul"
 #else
 #define DEVNULL "/dev/null"
@@ -276,12 +278,11 @@ extern int	pgunlink(const char *path);
  *	Win32 also doesn't have symlinks, but we can emulate them with
  *	junction points on newer Win32 versions.
  *
- *	Cygwin has its own symlinks which work on Win95/98/ME where
- *	junction points don't, so use those instead.  We have no way of
- *	knowing what type of system Cygwin binaries will be run on.
- *		Note: Some CYGWIN includes might #define WIN32.
+ *	Cygwin has its own symlinks that work where junction points don't, so use
+ *	those instead.  We have no way of knowing what type of system Cygwin
+ *	binaries will be run on.
  */
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(WIN32)
 extern int	pgsymlink(const char *oldpath, const char *newpath);
 extern int	pgreadlink(const char *path, char *buf, size_t size);
 extern bool pgwin32_is_junction(const char *path);
