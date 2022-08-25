@@ -2388,6 +2388,8 @@ PinBuffer(BufferDesc *buf, BufferAccessStrategy strategy)
 
 	Assert(!BufferIsLocal(b));
 
+elog(LOG, "XXX PinBuffer rel = %u, block = %u", buf->tag.rlocator.relNumber, buf->tag.blockNum);
+
 	ref = GetPrivateRefCountEntry(b, true);
 
 	if (ref == NULL)
@@ -2503,6 +2505,12 @@ PinBuffer_Locked(BufferDesc *buf)
 	PrivateRefCountEntry *ref;
 	uint32		buf_state;
 
+elog(LOG, "XXX PinBuffer_locked rel = %u, block = %u", buf->tag.rlocator.relNumber, buf->tag.blockNum);
+ref = GetPrivateRefCountEntry(BufferDescriptorGetBuffer(buf), false);
+if (ref)
+{
+elog(LOG, "XXX unexpected refcount = %d, rel = %u, block = %u", ref->refcount, buf->tag.rlocator.relNumber, buf->tag.blockNum);
+}
 	/*
 	 * As explained, We don't expect any preexisting pins. That allows us to
 	 * manipulate the PrivateRefCount after releasing the spinlock
@@ -2548,6 +2556,8 @@ UnpinBuffer(BufferDesc *buf, bool fixOwner)
 	Buffer		b = BufferDescriptorGetBuffer(buf);
 
 	Assert(!BufferIsLocal(b));
+
+elog(LOG, "XXX UnpinBuffer rel = %u, block = %u", buf->tag.rlocator.relNumber, buf->tag.blockNum);
 
 	/* not moving as we're likely deleting it soon anyway */
 	ref = GetPrivateRefCountEntry(b, false);
