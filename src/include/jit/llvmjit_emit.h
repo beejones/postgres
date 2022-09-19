@@ -118,9 +118,9 @@ l_load_struct_gep(LLVMBuilderRef b, LLVMValueRef v, int32 idx, const char *name)
  * Load value of a pointer, after applying one index operation.
  */
 static inline LLVMValueRef
-l_load_gep1(LLVMBuilderRef b, LLVMValueRef v, LLVMValueRef idx, const char *name)
+l_load_gep1(LLVMBuilderRef b, LLVMTypeRef t, LLVMValueRef v, LLVMValueRef idx, const char *name)
 {
-	LLVMValueRef v_ptr = LLVMBuildGEP(b, v, &idx, 1, "");
+	LLVMValueRef v_ptr = LLVMBuildGEP2(b, t, v, &idx, 1, "");
 
 	return LLVMBuildLoad(b, v_ptr, name);
 }
