@@ -560,7 +560,7 @@ llvm_function_reference(LLVMJitContext *context,
 							fcinfo->flinfo->fn_oid);
 		v_fn = LLVMGetNamedGlobal(mod, funcname);
 		if (v_fn != 0)
-			return LLVMBuildLoad(builder, v_fn, "");
+			return LLVMBuildLoad2(builder, TypePGFunction, v_fn, "");
 
 		v_fn_addr = l_ptr_const(fcinfo->flinfo->fn_addr, TypePGFunction);
 
@@ -570,7 +570,7 @@ llvm_function_reference(LLVMJitContext *context,
 		LLVMSetLinkage(v_fn, LLVMPrivateLinkage);
 		LLVMSetUnnamedAddr(v_fn, true);
 
-		return LLVMBuildLoad(builder, v_fn, "");
+		return LLVMBuildLoad2(builder, TypePGFunction, v_fn, "");
 	}
 
 	/* check if function already has been added */
@@ -1148,7 +1148,7 @@ llvm_resolve_symbols(LLVMOrcDefinitionGeneratorRef GeneratorObj, void *Ctx,
 					 LLVMOrcJITDylibRef JD, LLVMOrcJITDylibLookupFlags JDLookupFlags,
 					 LLVMOrcCLookupSet LookupSet, size_t LookupSetSize)
 {
-	LLVMOrcCSymbolMapPairs symbols = palloc0(sizeof(LLVMOrcCSymbolMapPair) * LookupSetSize);
+	LLVMOrcCSymbolMapPairs symbols = palloc0(sizeof(LLVMJITCSymbolMapPair) * LookupSetSize);
 	LLVMErrorRef error;
 	LLVMOrcMaterializationUnitRef mu;
 
@@ -1266,7 +1266,7 @@ llvm_create_jit_instance(LLVMTargetMachineRef tm)
 	 * Symbol resolution support for "special" functions, e.g. a call into an
 	 * SQL callable function.
 	 */
-	ref_gen = LLVMOrcCreateCustomCAPIDefinitionGenerator(llvm_resolve_symbols, NULL, NULL);
+	ref_gen = LLVMOrcCreateCustomCAPIDefinitionGenerator(llvm_resolve_symbols, NULL);
 	LLVMOrcJITDylibAddGenerator(LLVMOrcLLJITGetMainJITDylib(lljit), ref_gen);
 
 	return lljit;

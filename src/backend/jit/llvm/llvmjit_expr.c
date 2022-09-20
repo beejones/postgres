@@ -448,10 +448,14 @@ llvm_compile_expr(ExprState *state)
 
 					/* compute addresses of targets */
 					v_resultnum = l_int32_const(op->d.assign_var.resultnum);
-					v_rvaluep = LLVMBuildGEP(b, v_resultvalues,
-											 &v_resultnum, 1, "");
-					v_risnullp = LLVMBuildGEP(b, v_resultnulls,
+					v_rvaluep = LLVMBuildGEP2(b,
+											  TypeSizeT,
+											  v_resultvalues,
 											  &v_resultnum, 1, "");
+					v_risnullp = LLVMBuildGEP2(b,
+											   TypeStorageBool,
+											   v_resultnulls,
+											   &v_resultnum, 1, "");
 
 					/* and store */
 					LLVMBuildStore(b, v_value, v_rvaluep);
@@ -2211,7 +2215,7 @@ llvm_compile_expr(ExprState *state)
 
 					v_current_setp =
 						LLVMBuildStructGEP2(b,
-											TypeXXX...
+											LLVMInt32Type(),
 											v_aggstatep,
 											FIELDNO_AGGSTATE_CURRENT_SET,
 											"aggstate.current_set");

@@ -67,6 +67,7 @@ extern PGDLLIMPORT LLVMTypeRef TypeStorageBool;
 extern PGDLLIMPORT LLVMTypeRef StructNullableDatum;
 extern PGDLLIMPORT LLVMTypeRef StructTupleDescData;
 extern PGDLLIMPORT LLVMTypeRef StructHeapTupleData;
+extern PGDLLIMPORT LLVMTypeRef StructMinimalTupleData;
 extern PGDLLIMPORT LLVMTypeRef StructTupleTableSlot;
 extern PGDLLIMPORT LLVMTypeRef StructHeapTupleTableSlot;
 extern PGDLLIMPORT LLVMTypeRef StructMinimalTupleTableSlot;

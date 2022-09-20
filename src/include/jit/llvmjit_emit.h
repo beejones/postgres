@@ -107,11 +107,11 @@ l_pbool_const(bool i)
  * Load a pointer member idx from a struct.
  */
 static inline LLVMValueRef
-l_load_struct_gep(LLVMBuilderRef b, LLVMValueRef v, int32 idx, const char *name)
+l_load_struct_gep(LLVMBuilderRef b, LLVMTypeRef t, LLVMValueRef v, int32 idx, const char *name)
 {
-	LLVMValueRef v_ptr = LLVMBuildStructGEP(b, v, idx, "");
+	LLVMValueRef v_ptr = LLVMBuildStructGEP2(b, t, v, idx, "");
 
-	return LLVMBuildLoad(b, v_ptr, name);
+	return LLVMBuildLoad2(b, t, v_ptr, name);
 }
 
 /*
@@ -122,7 +122,7 @@ l_load_gep1(LLVMBuilderRef b, LLVMTypeRef t, LLVMValueRef v, LLVMValueRef idx, c
 {
 	LLVMValueRef v_ptr = LLVMBuildGEP2(b, t, v, &idx, 1, "");
 
-	return LLVMBuildLoad(b, v_ptr, name);
+	return LLVMBuildLoad2(b, t, v_ptr, name);
 }
 
 /* separate, because pg_attribute_printf(2, 3) can't appear in definition */
@@ -210,7 +210,7 @@ l_mcxt_switch(LLVMModuleRef mod, LLVMBuilderRef b, LLVMValueRef nc)
 
 	if (!(cur = LLVMGetNamedGlobal(mod, cmc)))
 		cur = LLVMAddGlobal(mod, l_ptr(StructMemoryContextData), cmc);
-	ret = LLVMBuildLoad(b, cur, cmc);
+	ret = LLVMBuildLoad2(b, l_ptr(StructMemoryContextData), cur, cmc);
 	LLVMBuildStore(b, nc, cur);
 
 	return ret;
@@ -225,13 +225,14 @@ l_funcnullp(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 	LLVMValueRef v_args;
 	LLVMValueRef v_argn;
 
-	v_args = LLVMBuildStructGEP(b,
-								v_fcinfo,
-								FIELDNO_FUNCTIONCALLINFODATA_ARGS,
-								"");
-	v_argn = LLVMBuildStructGEP(b, v_args, argno, "");
+	v_args = LLVMBuildStructGEP2(b,
+								 l_ptr(TypeParamBool),
+								 v_fcinfo,
+								 FIELDNO_FUNCTIONCALLINFODATA_ARGS,
+								 "");
+	v_argn = LLVMBuildStructGEP2(b, TypeParamBool, v_args, argno, "");
 
-	return LLVMBuildStructGEP(b, v_argn, FIELDNO_NULLABLE_DATUM_ISNULL, "");
+	return LLVMBuildStructGEP2(b, l_ptr(TypeParamBool), v_argn, FIELDNO_NULLABLE_DATUM_ISNULL, "");
 }
 
 /*
@@ -243,13 +244,16 @@ l_funcvaluep(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 	LLVMValueRef v_args;
 	LLVMValueRef v_argn;
 
-	v_args = LLVMBuildStructGEP(b,
-								v_fcinfo,
-								FIELDNO_FUNCTIONCALLINFODATA_ARGS,
-								"");
-	v_argn = LLVMBuildStructGEP(b, v_args, argno, "");
+	v_args = LLVMBuildStructGEP2(b,
+								 l_ptr(TypeSizeT),
+								 v_fcinfo,
+								 FIELDNO_FUNCTIONCALLINFODATA_ARGS,
+								 "");
+	v_argn = LLVMBuildStructGEP2(b,
+								 l_ptr(TypeSizeT),
+								 v_args, argno, "");
 
-	return LLVMBuildStructGEP(b, v_argn, FIELDNO_NULLABLE_DATUM_DATUM, "");
+	return LLVMBuildStructGEP2(b, l_ptr(TypeSizeT), v_argn, FIELDNO_NULLABLE_DATUM_DATUM, "");
 }
 
 /*
@@ -258,7 +262,7 @@ l_funcvaluep(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 static inline LLVMValueRef
 l_funcnull(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 {
-	return LLVMBuildLoad(b, l_funcnullp(b, v_fcinfo, argno), "");
+	return LLVMBuildLoad2(b, TypeParamBool, l_funcnullp(b, v_fcinfo, argno), "");
 }
 
 /*
@@ -267,7 +271,7 @@ l_funcnull(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 static inline LLVMValueRef
 l_funcvalue(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 {
-	return LLVMBuildLoad(b, l_funcvaluep(b, v_fcinfo, argno), "");
+	return LLVMBuildLoad2(b, TypeSizeT, l_funcvaluep(b, v_fcinfo, argno), "");
 }
 
 #endif							/* USE_LLVM */
