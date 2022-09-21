@@ -174,55 +174,85 @@ llvm_compile_expr(ExprState *state)
 									   v_state,
 									   FIELDNO_EXPRSTATE_RESNULL,
 									   "v.state.resnull");
-	v_parent = l_load_struct_gep(b, v_state,
+	v_parent = l_load_struct_gep(b,
+								 l_ptr(StructPlanState),
+								 v_state,
 								 FIELDNO_EXPRSTATE_PARENT,
 								 "v.state.parent");
 
 	/* build global slots */
-	v_scanslot = l_load_struct_gep(b, v_econtext,
+	v_scanslot = l_load_struct_gep(b,
+								   l_ptr(StructTupleTableSlot),
+								   v_econtext,
 								   FIELDNO_EXPRCONTEXT_SCANTUPLE,
 								   "v_scanslot");
-	v_innerslot = l_load_struct_gep(b, v_econtext,
+	v_innerslot = l_load_struct_gep(b,
+									l_ptr(StructTupleTableSlot),
+									v_econtext,
 									FIELDNO_EXPRCONTEXT_INNERTUPLE,
 									"v_innerslot");
-	v_outerslot = l_load_struct_gep(b, v_econtext,
+	v_outerslot = l_load_struct_gep(b,
+									l_ptr(StructTupleTableSlot),
+									v_econtext,
 									FIELDNO_EXPRCONTEXT_OUTERTUPLE,
 									"v_outerslot");
-	v_resultslot = l_load_struct_gep(b, v_state,
+	v_resultslot = l_load_struct_gep(b,
+									 l_ptr(StructExprState),
+									 v_state,
 									 FIELDNO_EXPRSTATE_RESULTSLOT,
 									 "v_resultslot");
 
 	/* build global values/isnull pointers */
-	v_scanvalues = l_load_struct_gep(b, v_scanslot,
+	v_scanvalues = l_load_struct_gep(b,
+									 l_ptr(StructTupleTableSlot),
+									 v_scanslot,
 									 FIELDNO_TUPLETABLESLOT_VALUES,
 									 "v_scanvalues");
-	v_scannulls = l_load_struct_gep(b, v_scanslot,
+	v_scannulls = l_load_struct_gep(b,
+									l_ptr(StructTupleTableSlot),
+									v_scanslot,
 									FIELDNO_TUPLETABLESLOT_ISNULL,
 									"v_scannulls");
-	v_innervalues = l_load_struct_gep(b, v_innerslot,
+	v_innervalues = l_load_struct_gep(b,
+									  l_ptr(StructTupleTableSlot),
+									  v_innerslot,
 									  FIELDNO_TUPLETABLESLOT_VALUES,
 									  "v_innervalues");
-	v_innernulls = l_load_struct_gep(b, v_innerslot,
+	v_innernulls = l_load_struct_gep(b,
+									 l_ptr(StructTupleTableSlot),
+									 v_innerslot,
 									 FIELDNO_TUPLETABLESLOT_ISNULL,
 									 "v_innernulls");
-	v_outervalues = l_load_struct_gep(b, v_outerslot,
+	v_outervalues = l_load_struct_gep(b,
+									  l_ptr(StructTupleTableSlot),
+									  v_outerslot,
 									  FIELDNO_TUPLETABLESLOT_VALUES,
 									  "v_outervalues");
-	v_outernulls = l_load_struct_gep(b, v_outerslot,
+	v_outernulls = l_load_struct_gep(b,
+									 l_ptr(StructTupleTableSlot),
+									 v_outerslot,
 									 FIELDNO_TUPLETABLESLOT_ISNULL,
 									 "v_outernulls");
-	v_resultvalues = l_load_struct_gep(b, v_resultslot,
+	v_resultvalues = l_load_struct_gep(b,
+									   l_ptr(StructTupleTableSlot),
+									   v_resultslot,
 									   FIELDNO_TUPLETABLESLOT_VALUES,
 									   "v_resultvalues");
-	v_resultnulls = l_load_struct_gep(b, v_resultslot,
+	v_resultnulls = l_load_struct_gep(b,
+									  l_ptr(StructTupleTableSlot),
+									  v_resultslot,
 									  FIELDNO_TUPLETABLESLOT_ISNULL,
 									  "v_resultnulls");
 
 	/* aggvalues/aggnulls */
-	v_aggvalues = l_load_struct_gep(b, v_econtext,
+	v_aggvalues = l_load_struct_gep(b,
+									l_ptr(TypeSizeT),
+									v_econtext,
 									FIELDNO_EXPRCONTEXT_AGGVALUES,
 									"v.econtext.aggvalues");
-	v_aggnulls = l_load_struct_gep(b, v_econtext,
+	v_aggnulls = l_load_struct_gep(b,
+								   l_ptr(TypeStorageBool),
+								   v_econtext,
 								   FIELDNO_EXPRCONTEXT_AGGNULLS,
 								   "v.econtext.aggnulls");
 
@@ -256,8 +286,8 @@ llvm_compile_expr(ExprState *state)
 					LLVMValueRef v_tmpisnull;
 					LLVMValueRef v_tmpvalue;
 
-					v_tmpvalue = LLVMBuildLoad(b, v_tmpvaluep, "");
-					v_tmpisnull = LLVMBuildLoad(b, v_tmpisnullp, "");
+					v_tmpvalue = LLVMBuildLoad2(b, TypeSizeT, v_tmpvaluep, "");
+					v_tmpisnull = LLVMBuildLoad2(b, TypeStorageBool, v_tmpisnullp, "");
 
 					LLVMBuildStore(b, v_tmpisnull, v_isnullp);
 
@@ -300,7 +330,9 @@ llvm_compile_expr(ExprState *state)
 					 * whether deforming is required.
 					 */
 					v_nvalid =
-						l_load_struct_gep(b, v_slot,
+						l_load_struct_gep(b,
+										  l_ptr(StructTupleTableSlot),
+										  v_slot,
 										  FIELDNO_TUPLETABLESLOT_NVALID,
 										  "");
 					LLVMBuildCondBr(b,
@@ -331,8 +363,10 @@ llvm_compile_expr(ExprState *state)
 
 						params[0] = v_slot;
 
-						LLVMBuildCall(b, l_jit_deform,
-									  params, lengthof(params), "");
+						LLVMBuildCall2(b,
+									   LLVMGetFunctionType(l_jit_deform),
+									   l_jit_deform,
+									   params, lengthof(params), "");
 					}
 					else
 					{
@@ -341,9 +375,10 @@ llvm_compile_expr(ExprState *state)
 						params[0] = v_slot;
 						params[1] = l_int32_const(op->d.fetch.last_var);
 
-						LLVMBuildCall(b,
-									  llvm_pg_func(mod, "slot_getsomeattrs_int"),
-									  params, lengthof(params), "");
+						LLVMBuildCall2(b,
+									   llvm_pg_var_func_type("slot_getsomeattrs_int"),
+									   llvm_pg_func(mod, "slot_getsomeattrs_int"),
+									   params, lengthof(params), "");
 					}
 
 					LLVMBuildBr(b, opblocks[opno + 1]);
@@ -377,8 +412,8 @@ llvm_compile_expr(ExprState *state)
 					}
 
 					v_attnum = l_int32_const(op->d.var.attnum);
-					value = l_load_gep1(b, v_values, v_attnum, "");
-					isnull = l_load_gep1(b, v_nulls, v_attnum, "");
+					value = l_load_gep1(b, TypeSizeT, v_values, v_attnum, "");
+					isnull = l_load_gep1(b, TypeStorageBool, v_nulls, v_attnum, "");
 					LLVMBuildStore(b, value, v_resvaluep);
 					LLVMBuildStore(b, isnull, v_resnullp);
 
@@ -443,8 +478,8 @@ llvm_compile_expr(ExprState *state)
 
 					/* load data */
 					v_attnum = l_int32_const(op->d.assign_var.attnum);
-					v_value = l_load_gep1(b, v_values, v_attnum, "");
-					v_isnull = l_load_gep1(b, v_nulls, v_attnum, "");
+					v_value = l_load_gep1(b, TypeSizeT, v_values, v_attnum, "");
+					v_isnull = l_load_gep1(b, TypeStorageBool, v_nulls, v_attnum, "");
 
 					/* compute addresses of targets */
 					v_resultnum = l_int32_const(op->d.assign_var.resultnum);
@@ -476,15 +511,15 @@ llvm_compile_expr(ExprState *state)
 					size_t		resultnum = op->d.assign_tmp.resultnum;
 
 					/* load data */
-					v_value = LLVMBuildLoad(b, v_tmpvaluep, "");
-					v_isnull = LLVMBuildLoad(b, v_tmpisnullp, "");
+					v_value = LLVMBuildLoad2(b, TypeSizeT, v_tmpvaluep, "");
+					v_isnull = LLVMBuildLoad2(b, TypeStorageBool, v_tmpisnullp, "");
 
 					/* compute addresses of targets */
 					v_resultnum = l_int32_const(resultnum);
 					v_rvaluep =
-						LLVMBuildGEP(b, v_resultvalues, &v_resultnum, 1, "");
+						LLVMBuildGEP2(b, TypeSizeT, v_resultvalues, &v_resultnum, 1, "");
 					v_risnullp =
-						LLVMBuildGEP(b, v_resultnulls, &v_resultnum, 1, "");
+						LLVMBuildGEP2(b, TypeStorageBool, v_resultnulls, &v_resultnum, 1, "");
 
 					/* store nullness */
 					LLVMBuildStore(b, v_isnull, v_risnullp);
@@ -508,9 +543,10 @@ llvm_compile_expr(ExprState *state)
 						LLVMPositionBuilderAtEnd(b, b_notnull);
 						v_params[0] = v_value;
 						v_value =
-							LLVMBuildCall(b,
-										  llvm_pg_func(mod, "MakeExpandedObjectReadOnlyInternal"),
-										  v_params, lengthof(v_params), "");
+							LLVMBuildCall2(b,
+										   llvm_pg_var_func_type("MakeExpandedObjectReadOnlyInternal"),
+										   llvm_pg_func(mod, "MakeExpandedObjectReadOnlyInternal"),
+										   v_params, lengthof(v_params), "");
 
 						/*
 						 * Falling out of the if () with builder in b_notnull,
@@ -673,8 +709,8 @@ llvm_compile_expr(ExprState *state)
 					if (opcode == EEOP_BOOL_AND_STEP_FIRST)
 						LLVMBuildStore(b, l_sbool_const(0), v_boolanynullp);
 
-					v_boolnull = LLVMBuildLoad(b, v_resnullp, "");
-					v_boolvalue = LLVMBuildLoad(b, v_resvaluep, "");
+					v_boolnull = LLVMBuildLoad2(b, TypeStorageBool, v_resnullp, "");
+					v_boolvalue = LLVMBuildLoad2(b, TypeSizeT, v_resvaluep, "");
 
 					/* set resnull to boolnull */
 					LLVMBuildStore(b, v_boolnull, v_resnullp);
@@ -715,7 +751,7 @@ llvm_compile_expr(ExprState *state)
 					/* Build block that continues if bool is TRUE. */
 					LLVMPositionBuilderAtEnd(b, b_boolcont);
 
-					v_boolanynull = LLVMBuildLoad(b, v_boolanynullp, "");
+					v_boolanynull = LLVMBuildLoad2(b, v_boolanynullp, "");
 
 					/* set value to NULL if any previous values were NULL */
 					LLVMBuildCondBr(b,

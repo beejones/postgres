@@ -560,7 +560,7 @@ slot_compile_deform(LLVMJitContext *context, TupleDesc desc,
 			/* translation of alignment code (cf TYPEALIGN()) */
 			{
 				LLVMValueRef v_off_aligned;
-				LLVMValueRef v_off = LLVMBuildLoad2(b, TypeSizeT, v_offp, ""); /* XXX:TM ?! */
+				LLVMValueRef v_off = LLVMBuildLoad2(b, LLVMInt32Type(), v_offp, "");
 
 				/* ((ALIGNVAL) - 1) */
 				LLVMValueRef v_alignval = l_sizet_const(alignto - 1);
@@ -649,10 +649,10 @@ slot_compile_deform(LLVMJitContext *context, TupleDesc desc,
 
 		/* compute address to load data from */
 		{
-			LLVMValueRef v_off = LLVMBuildLoad2(b, LLVMInt8Type(), v_offp, ""); /* XXX:TM random */
+			LLVMValueRef v_off = LLVMBuildLoad2(b, LLVMInt32Type(), v_offp, "");
 
 			v_attdatap =
-				LLVMBuildGEP2(b, LLVMInt8Type(), v_tupdata_base, &v_off, 1, ""); /* XXX:TM random! */
+				LLVMBuildGEP2(b, LLVMInt32Type(), v_tupdata_base, &v_off, 1, "");
 		}
 
 		/* compute address to store value at */
@@ -699,18 +699,20 @@ slot_compile_deform(LLVMJitContext *context, TupleDesc desc,
 		}
 		else if (att->attlen == -1)
 		{
-			v_incby = LLVMBuildCall(b,
-									llvm_pg_func(mod, "varsize_any"),
-									&v_attdatap, 1,
-									"varsize_any");
+			v_incby = LLVMBuildCall2(b,
+									 llvm_pg_var_func_type("varsize_any"),
+									 llvm_pg_func(mod, "varsize_any"),
+									 &v_attdatap, 1,
+									 "varsize_any");
 			l_callsite_ro(v_incby);
 			l_callsite_alwaysinline(v_incby);
 		}
 		else if (att->attlen == -2)
 		{
-			v_incby = LLVMBuildCall(b,
-									llvm_pg_func(mod, "strlen"),
-									&v_attdatap, 1, "strlen");
+			v_incby = LLVMBuildCall2(b,
+									 llvm_pg_var_func_type("strlen"),
+									 llvm_pg_func(mod, "strlen"),
+									 &v_attdatap, 1, "strlen");
 
 			l_callsite_ro(v_incby);
 
@@ -730,7 +732,7 @@ slot_compile_deform(LLVMJitContext *context, TupleDesc desc,
 		}
 		else
 		{
-			LLVMValueRef v_off = LLVMBuildLoad(b, v_offp, "");
+			LLVMValueRef v_off = LLVMBuildLoad2(b, LLVMInt32Type(), v_offp, "");
 
 			v_off = LLVMBuildAdd(b, v_off, v_incby, "increment_offset");
 			LLVMBuildStore(b, v_off, v_offp);
@@ -756,13 +758,13 @@ slot_compile_deform(LLVMJitContext *context, TupleDesc desc,
 	LLVMPositionBuilderAtEnd(b, b_out);
 
 	{
-		LLVMValueRef v_off = LLVMBuildLoad(b, v_offp, "");
+		LLVMValueRef v_off = LLVMBuildLoad2(b, LLVMInt32Type(), v_offp, "");
 		LLVMValueRef v_flags;
 
 		LLVMBuildStore(b, l_int16_const(natts), v_nvalidp);
 		v_off = LLVMBuildTrunc(b, v_off, LLVMInt32Type(), "");
 		LLVMBuildStore(b, v_off, v_slotoffp);
-		v_flags = LLVMBuildLoad(b, v_flagsp, "tts_flags");
+		v_flags = LLVMBuildLoad2(b, LLVMInt16Type(), v_flagsp, "tts_flags");
 		v_flags = LLVMBuildOr(b, v_flags, l_int16_const(TTS_FLAG_SLOW), "");
 		LLVMBuildStore(b, v_flags, v_flagsp);
 		LLVMBuildRetVoid(b);

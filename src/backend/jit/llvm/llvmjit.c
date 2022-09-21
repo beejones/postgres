@@ -85,6 +85,7 @@ LLVMTypeRef StructExprState;
 LLVMTypeRef StructAggState;
 LLVMTypeRef StructAggStatePerGroupData;
 LLVMTypeRef StructAggStatePerTransData;
+LLVMTypeRef StructPlanState;
 
 LLVMValueRef AttributeTemplate;
 
@@ -1059,6 +1060,7 @@ llvm_create_types(void)
 	StructAggState = llvm_pg_var_type("StructAggState");
 	StructAggStatePerGroupData = llvm_pg_var_type("StructAggStatePerGroupData");
 	StructAggStatePerTransData = llvm_pg_var_type("StructAggStatePerTransData");
+	StructPlanState = llvm_pg_var_type("StructPlanState");
 
 	AttributeTemplate = LLVMGetNamedFunction(llvm_types_module, "AttributeTemplate");
 }

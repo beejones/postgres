@@ -79,7 +79,8 @@ extern PGDLLIMPORT LLVMTypeRef StructExprState;
 extern PGDLLIMPORT LLVMTypeRef StructAggState;
 extern PGDLLIMPORT LLVMTypeRef StructAggStatePerTransData;
 extern PGDLLIMPORT LLVMTypeRef StructAggStatePerGroupData;
-
+extern PGDLLIMPORT LLVMTypeRef StructPlanState;
+	
 extern PGDLLIMPORT LLVMValueRef AttributeTemplate;
 
 
