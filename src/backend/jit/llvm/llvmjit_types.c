@@ -71,6 +71,8 @@ TupleTableSlot StructTupleTableSlot;
 HeapTupleTableSlot StructHeapTupleTableSlot;
 MinimalTupleTableSlot StructMinimalTupleTableSlot;
 TupleDescData StructTupleDescData;
+PlanState StructPlanState;
+MinimalTupleData StructMinimalTupleData;
 
 
 /*

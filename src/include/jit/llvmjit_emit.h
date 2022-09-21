@@ -226,13 +226,13 @@ l_funcnullp(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 	LLVMValueRef v_argn;
 
 	v_args = LLVMBuildStructGEP2(b,
-								 l_ptr(TypeParamBool),
+								 LLVMArrayType(StructNullableDatum, 0),
 								 v_fcinfo,
 								 FIELDNO_FUNCTIONCALLINFODATA_ARGS,
 								 "");
-	v_argn = LLVMBuildStructGEP2(b, TypeParamBool, v_args, argno, "");
+	v_argn = LLVMBuildStructGEP2(b, StructNullableDatum, v_args, argno, "");
 
-	return LLVMBuildStructGEP2(b, l_ptr(TypeParamBool), v_argn, FIELDNO_NULLABLE_DATUM_ISNULL, "");
+	return LLVMBuildStructGEP2(b, TypeStorageBool, v_argn, FIELDNO_NULLABLE_DATUM_ISNULL, "");
 }
 
 /*
@@ -262,7 +262,7 @@ l_funcvaluep(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 static inline LLVMValueRef
 l_funcnull(LLVMBuilderRef b, LLVMValueRef v_fcinfo, size_t argno)
 {
-	return LLVMBuildLoad2(b, TypeParamBool, l_funcnullp(b, v_fcinfo, argno), "");
+	return LLVMBuildLoad2(b, TypeStorageBool, l_funcnullp(b, v_fcinfo, argno), "");
 }
 
 /*
