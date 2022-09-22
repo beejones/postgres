@@ -572,7 +572,7 @@ llvm_function_reference(LLVMJitContext *context,
 		LLVMSetLinkage(v_fn, LLVMPrivateLinkage);
 		LLVMSetUnnamedAddr(v_fn, true);
 
-		return LLVMBuildLoad2(builder, LLVMGetFunctionType(v_fn), v_fn, "");
+		return LLVMBuildLoad2(builder, TypePGFunction, v_fn, "");
 	}
 
 	/* check if function already has been added */
@@ -580,8 +580,8 @@ llvm_function_reference(LLVMJitContext *context,
 	if (v_fn != 0)
 		return v_fn;
 
-	v_fn = LLVMAddFunction(mod, funcname, TypePGFunction);
-//	v_fn = LLVMAddFunction(mod, funcname, LLVMGetElementType(TypePGFunction));
+	LLVMDumpValue(v_fn);
+	v_fn = LLVMAddFunction(mod, funcname, LLVMGetFunctionType(v_fn));
 
 	return v_fn;
 }
