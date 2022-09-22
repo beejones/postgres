@@ -798,6 +798,16 @@ llvm_session_initialize(void)
 	LLVMInitializeNativeAsmPrinter();
 	LLVMInitializeNativeAsmParser();
 
+#if LLVM_VERSION_MAJOR > 11
+	/* Create a context before we create types, so the types can be in it. */
+	llvm_ts_context = LLVMOrcCreateNewThreadSafeContext();
+#endif
+
+#if LLVM_VERSION_MAJOR > 14
+	/* We aren't ready for https://llvm.org/docs/OpaquePointers.html yet. */
+	LLVMContextSetOpaquePointers(LLVMOrcThreadSafeContextGetContext(llvm_ts_context), false);
+#endif
+
 	/*
 	 * Synchronize types early, as that also includes inferring the target
 	 * triple.
@@ -841,13 +851,6 @@ llvm_session_initialize(void)
 
 #if LLVM_VERSION_MAJOR > 11
 	{
-		llvm_ts_context = LLVMOrcCreateNewThreadSafeContext();
-
-#if LLVM_VERSION_MAJOR > 14
-		/* We aren't ready for https://llvm.org/docs/OpaquePointers.html */
-		LLVMContextSetOpaquePointers(LLVMOrcThreadSafeContextGetContext(llvm_ts_context), false);
-#endif
-
 		llvm_opt0_orc = llvm_create_jit_instance(opt0_tm);
 		opt0_tm = 0;
 
@@ -997,7 +1000,12 @@ llvm_create_types(void)
 	}
 
 	/* eagerly load contents, going to need it all */
+#if LLVM_VERSION_MAJOR > 14
+	if (LLVMParseBitcodeInContext2(LLVMOrcThreadSafeContextGetContext(llvm_ts_context),
+								   buf, &llvm_types_module))
+#else
 	if (LLVMParseBitcode2(buf, &llvm_types_module))
+#endif
 	{
 		elog(ERROR, "LLVMParseBitcode2 of %s failed", path);
 	}
