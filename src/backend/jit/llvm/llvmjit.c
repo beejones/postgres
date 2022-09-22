@@ -843,6 +843,11 @@ llvm_session_initialize(void)
 	{
 		llvm_ts_context = LLVMOrcCreateNewThreadSafeContext();
 
+#if LLVM_VERSION_MAJOR > 14
+		/* We aren't ready for https://llvm.org/docs/OpaquePointers.html */
+		LLVMContextSetOpaquePointers(LLVMOrcThreadSafeContextGetContext(llvm_ts_context), false);
+#endif
+
 		llvm_opt0_orc = llvm_create_jit_instance(opt0_tm);
 		opt0_tm = 0;
 
@@ -1112,7 +1117,11 @@ llvm_resolve_symbols(LLVMOrcDefinitionGeneratorRef GeneratorObj, void *Ctx,
 					 LLVMOrcJITDylibRef JD, LLVMOrcJITDylibLookupFlags JDLookupFlags,
 					 LLVMOrcCLookupSet LookupSet, size_t LookupSetSize)
 {
+#if LLVM_VERSION_MAJOR > 14
+	LLVMOrcCSymbolMapPairs symbols = palloc0(sizeof(LLVMOrcCSymbolMapPair) * LookupSetSize);
+#else
 	LLVMOrcCSymbolMapPairs symbols = palloc0(sizeof(LLVMJITCSymbolMapPair) * LookupSetSize);
+#endif
 	LLVMErrorRef error;
 	LLVMOrcMaterializationUnitRef mu;
 
@@ -1230,7 +1239,11 @@ llvm_create_jit_instance(LLVMTargetMachineRef tm)
 	 * Symbol resolution support for "special" functions, e.g. a call into an
 	 * SQL callable function.
 	 */
+#if LLVM_VERSION_MAJOR > 14
+	ref_gen = LLVMOrcCreateCustomCAPIDefinitionGenerator(llvm_resolve_symbols, NULL, NULL);
+#else
 	ref_gen = LLVMOrcCreateCustomCAPIDefinitionGenerator(llvm_resolve_symbols, NULL);
+#endif
 	LLVMOrcJITDylibAddGenerator(LLVMOrcLLJITGetMainJITDylib(lljit), ref_gen);
 
 	return lljit;
