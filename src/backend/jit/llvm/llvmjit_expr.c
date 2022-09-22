@@ -165,93 +165,93 @@ llvm_compile_expr(ExprState *state)
 	LLVMPositionBuilderAtEnd(b, entry);
 
 	v_tmpvaluep = LLVMBuildStructGEP2(b,
-									  TypeSizeT,
+									  StructExprState,
 									  v_state,
 									  FIELDNO_EXPRSTATE_RESVALUE,
 									  "v.state.resvalue");
 	v_tmpisnullp = LLVMBuildStructGEP2(b,
-									   TypeStorageBool,
+									   StructExprState,
 									   v_state,
 									   FIELDNO_EXPRSTATE_RESNULL,
 									   "v.state.resnull");
 	v_parent = l_load_struct_gep(b,
-								 l_ptr(StructPlanState),
+								 StructExprState,
 								 v_state,
 								 FIELDNO_EXPRSTATE_PARENT,
 								 "v.state.parent");
 
 	/* build global slots */
 	v_scanslot = l_load_struct_gep(b,
-								   l_ptr(StructTupleTableSlot),
+								   StructExprContext,
 								   v_econtext,
 								   FIELDNO_EXPRCONTEXT_SCANTUPLE,
 								   "v_scanslot");
 	v_innerslot = l_load_struct_gep(b,
-									l_ptr(StructTupleTableSlot),
+									StructExprContext,
 									v_econtext,
 									FIELDNO_EXPRCONTEXT_INNERTUPLE,
 									"v_innerslot");
 	v_outerslot = l_load_struct_gep(b,
-									l_ptr(StructTupleTableSlot),
+									StructExprContext,
 									v_econtext,
 									FIELDNO_EXPRCONTEXT_OUTERTUPLE,
 									"v_outerslot");
 	v_resultslot = l_load_struct_gep(b,
-									 l_ptr(StructExprState),
+									 StructExprState,
 									 v_state,
 									 FIELDNO_EXPRSTATE_RESULTSLOT,
 									 "v_resultslot");
 
 	/* build global values/isnull pointers */
 	v_scanvalues = l_load_struct_gep(b,
-									 l_ptr(StructTupleTableSlot),
+									 StructTupleTableSlot,
 									 v_scanslot,
 									 FIELDNO_TUPLETABLESLOT_VALUES,
 									 "v_scanvalues");
 	v_scannulls = l_load_struct_gep(b,
-									l_ptr(StructTupleTableSlot),
+									StructTupleTableSlot,
 									v_scanslot,
 									FIELDNO_TUPLETABLESLOT_ISNULL,
 									"v_scannulls");
 	v_innervalues = l_load_struct_gep(b,
-									  l_ptr(StructTupleTableSlot),
+									  StructTupleTableSlot,
 									  v_innerslot,
 									  FIELDNO_TUPLETABLESLOT_VALUES,
 									  "v_innervalues");
 	v_innernulls = l_load_struct_gep(b,
-									 l_ptr(StructTupleTableSlot),
+									 StructTupleTableSlot,
 									 v_innerslot,
 									 FIELDNO_TUPLETABLESLOT_ISNULL,
 									 "v_innernulls");
 	v_outervalues = l_load_struct_gep(b,
-									  l_ptr(StructTupleTableSlot),
+									  StructTupleTableSlot,
 									  v_outerslot,
 									  FIELDNO_TUPLETABLESLOT_VALUES,
 									  "v_outervalues");
 	v_outernulls = l_load_struct_gep(b,
-									 l_ptr(StructTupleTableSlot),
+									 StructTupleTableSlot,
 									 v_outerslot,
 									 FIELDNO_TUPLETABLESLOT_ISNULL,
 									 "v_outernulls");
 	v_resultvalues = l_load_struct_gep(b,
-									   l_ptr(StructTupleTableSlot),
+									   StructTupleTableSlot,
 									   v_resultslot,
 									   FIELDNO_TUPLETABLESLOT_VALUES,
 									   "v_resultvalues");
 	v_resultnulls = l_load_struct_gep(b,
-									  l_ptr(StructTupleTableSlot),
+									  StructTupleTableSlot,
 									  v_resultslot,
 									  FIELDNO_TUPLETABLESLOT_ISNULL,
 									  "v_resultnulls");
 
 	/* aggvalues/aggnulls */
 	v_aggvalues = l_load_struct_gep(b,
-									l_ptr(TypeSizeT),
+									StructExprContext,
 									v_econtext,
 									FIELDNO_EXPRCONTEXT_AGGVALUES,
 									"v.econtext.aggvalues");
 	v_aggnulls = l_load_struct_gep(b,
-								   l_ptr(TypeStorageBool),
+								   StructExprContext,
 								   v_econtext,
 								   FIELDNO_EXPRCONTEXT_AGGNULLS,
 								   "v.econtext.aggnulls");
@@ -331,7 +331,7 @@ llvm_compile_expr(ExprState *state)
 					 */
 					v_nvalid =
 						l_load_struct_gep(b,
-										  l_ptr(StructTupleTableSlot),
+										  StructTupleTableSlot,
 										  v_slot,
 										  FIELDNO_TUPLETABLESLOT_NVALID,
 										  "");
@@ -2551,13 +2551,13 @@ BuildV1Call(LLVMJitContext *context, LLVMBuilderRef b,
 
 	v_fcinfo = l_ptr_const(fcinfo, l_ptr(StructFunctionCallInfoData));
 	v_fcinfo_isnullp = LLVMBuildStructGEP2(b,
-										   TypeStorageBool,
+										   StructFunctionCallInfoData,
 										   v_fcinfo,
 										   FIELDNO_FUNCTIONCALLINFODATA_ISNULL,
 										   "v_fcinfo_isnull");
 	LLVMBuildStore(b, l_sbool_const(0), v_fcinfo_isnullp);
 
-	v_retval = LLVMBuildCall2(b, LLVMGetFunctionType(v_fn), v_fn, &v_fcinfo, 1, "funccall");
+	v_retval = LLVMBuildCall2(b, TypePGFunction, v_fn, &v_fcinfo, 1, "funccall");
 
 	if (v_fcinfo_isnull)
 		*v_fcinfo_isnull = LLVMBuildLoad2(b, TypeStorageBool, v_fcinfo_isnullp, "");
