@@ -220,28 +220,30 @@ dir_open_for_write(WalWriteMethod *wwmethod, const char *pathname,
 	/* Do pre-padding on non-compressed files */
 	if (pad_to_size && wwmethod->compression_algorithm == PG_COMPRESSION_NONE)
 	{
-		PGAlignedXLogBlock zerobuf;
-		int			bytes;
+		ssize_t rc;
 
-		memset(zerobuf.data, 0, XLOG_BLCKSZ);
-		for (bytes = 0; bytes < pad_to_size; bytes += XLOG_BLCKSZ)
+		rc = pg_pwritev_zeros(fd, pad_to_size);
+
+		if (rc < 0)
 		{
-			errno = 0;
-			if (write(fd, zerobuf.data, XLOG_BLCKSZ) != XLOG_BLCKSZ)
-			{
-				/* If write didn't set errno, assume problem is no disk space */
-				wwmethod->lasterrno = errno ? errno : ENOSPC;
-				close(fd);
-				return NULL;
-			}
+			wwmethod->lasterrno = errno;
+			close(fd);
+			return NULL;
 		}
 
+#ifdef WIN32
+		/*
+		 * XXX: It looks like on Windows, we need an explicit lseek() call here
+		 * despite using pwrite() implementation from win32pwrite.c. Otherwise
+		 * an error occurs.
+		 */
 		if (lseek(fd, 0, SEEK_SET) != 0)
 		{
 			wwmethod->lasterrno = errno;
 			close(fd);
 			return NULL;
 		}
+#endif
 	}
 
 	/*

@@ -525,3 +525,80 @@ pg_pwritev_with_retry(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 
 	return sum;
 }
+
+/*
+ * Function to zero-fill a file with given size. On failure, a negative value
+ * is returned and errno is set appropriately so that the caller can use it
+ * accordingly.
+ */
+ssize_t
+pg_pwritev_zeros(int fd, size_t size)
+{
+	PGAlignedXLogBlock	zbuffer;
+	struct iovec	iov[PG_IOV_MAX];
+	int		blocks;
+	size_t	block_sz;
+	size_t	remaining_size = 0;
+	int		i;
+	ssize_t	written;
+	ssize_t	total_written = 0;
+
+	/*
+	 * XXX: Writing more than one block of size XLOG_BLCKSZ bytes via
+	 * PGAlignedXLogBlock structure per vector buffer might improve write
+	 * performance on some platforms. However, tests (on some platforms, not
+	 * all) show not much improvements with varying block sizes. Hence we stick
+	 * to one block in PGAlignedXLogBlock structure.
+	 */
+	block_sz = sizeof(zbuffer.data);
+
+	memset(zbuffer.data, 0, block_sz);
+
+	/* Prepare to write out a lot of copies of our zero buffer at once. */
+	for (i = 0; i < lengthof(iov); ++i)
+	{
+		iov[i].iov_base = zbuffer.data;
+		iov[i].iov_len = block_sz;
+	}
+
+	/* Loop, writing as many blocks as we can for each system call. */
+	blocks = size / block_sz;
+	remaining_size = size % block_sz;
+	for (i = 0; i < blocks;)
+	{
+		int		iovcnt = Min(blocks - i, lengthof(iov));
+		off_t	offset = i * block_sz;
+
+		written = pg_pwritev_with_retry(fd, iov, iovcnt, offset);
+
+		if (written < 0)
+			return written;
+
+		i += iovcnt;
+		total_written += written;
+	}
+
+	/* Now, write the remaining size, if any, of the file with zeros. */
+	if (remaining_size > 0)
+	{
+		/* We'll never write more than one block here */
+		int		iovcnt = 1;
+
+		/* Jump on to the end of previously written blocks */
+		off_t	offset = i * block_sz;
+
+		iov[0].iov_base = zbuffer.data;
+		iov[0].iov_len = remaining_size;
+
+		written = pg_pwritev_with_retry(fd, iov, iovcnt, offset);
+
+		if (written < 0)
+			return written;
+
+		total_written += written;
+	}
+
+	Assert(total_written == size);
+
+	return total_written;
+}
