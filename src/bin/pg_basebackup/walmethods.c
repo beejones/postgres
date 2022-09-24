@@ -221,6 +221,10 @@ dir_open_for_write(WalWriteMethod *wwmethod, const char *pathname,
 	if (pad_to_size && wwmethod->compression_algorithm == PG_COMPRESSION_NONE)
 	{
 		ssize_t rc;
+		off_t before_offset;
+		off_t after_offset;
+
+		before_offset = lseek(fd, 0, SEEK_CUR);
 
 		rc = pg_pwritev_zeros(fd, pad_to_size);
 
@@ -230,6 +234,9 @@ dir_open_for_write(WalWriteMethod *wwmethod, const char *pathname,
 			close(fd);
 			return NULL;
 		}
+
+		after_offset = lseek(fd, 0, SEEK_CUR);
+		Assert(before_offset == after_offset);
 
 #ifdef WIN32
 		/*
