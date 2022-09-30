@@ -761,7 +761,7 @@ libpqrcv_receive(WalReceiverConn *conn, char **buffer,
 			/* XXX begin hack */
 			{
 				FILE *log = fopen("/tmp/libpq.log", "a");
-				fprintf(log, "-->Error marker1: %s\n", pchomp(PQerrorMessage(conn->streamConn));
+				fprintf(log, "-->Error marker1: %s\n", pchomp(PQerrorMessage(conn->streamConn)));
 				fclose(log);
 			}
 			/* XXX end hack */		
@@ -822,7 +822,7 @@ libpqrcv_receive(WalReceiverConn *conn, char **buffer,
 			/* XXX begin hack */
 			{
 				FILE *log = fopen("/tmp/libpq.log", "a");
-				fprintf(log, "-->Error marker2: %s\n", pchomp(PQerrorMessage(conn->streamConn));
+				fprintf(log, "-->Error marker2: %s\n", pchomp(PQerrorMessage(conn->streamConn)));
 				fclose(log);
 			}
 			/* XXX end hack */		
@@ -836,7 +836,7 @@ libpqrcv_receive(WalReceiverConn *conn, char **buffer,
 		/* XXX begin hack */
 		{
 			FILE *log = fopen("/tmp/libpq.log", "a");
-			fprintf(log, "-->Error marker3: %s\n", pchomp(PQerrorMessage(conn->streamConn));
+			fprintf(log, "-->Error marker3: %s\n", pchomp(PQerrorMessage(conn->streamConn)));
 			fclose(log);
 		}
 		/* XXX end hack */		
