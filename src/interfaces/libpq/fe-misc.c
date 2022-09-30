@@ -263,7 +263,7 @@ pqGetInt(int *result, size_t bytes, PGconn *conn)
 	/* XXX begin hack */
 	{
 		FILE *log = fopen("/tmp/libpq.log", "a");
-		fprintf(log, "%02x%02x%02x%02x", *result, *(result+1)*(result+2)*(result+3));
+		fprintf(log, "%02x%02x%02x%02x", *result, *(result+1), *(result+2), *(result+3));
 		fclose(log);
 	}
 	/* XXX end hack */
