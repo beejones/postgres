@@ -860,11 +860,20 @@ static void
 libpqrcv_send(WalReceiverConn *conn, const char *buffer, int nbytes)
 {
 	if (PQputCopyData(conn->streamConn, buffer, nbytes) <= 0 ||
-		PQflush(conn->streamConn))
+		PQflush(conn->streamConn)) {
+		/* XXX begin hack */
+		{
+			FILE *log = fopen("/tmp/libpq.log", "a");
+			fprintf(log, "-->Error marker4: %s\n", pchomp(PQerrorMessage(conn->streamConn)));
+			fclose(log);
+		}
+		/* XXX end hack */		
+		
 		ereport(ERROR,
 				(errcode(ERRCODE_CONNECTION_FAILURE),
 				 errmsg("could not send data to WAL stream: %s",
 						pchomp(PQerrorMessage(conn->streamConn)))));
+	}
 }
 
 /*
