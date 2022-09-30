@@ -133,9 +133,9 @@ pqGets_internal(PQExpBuffer buf, PGconn *conn, bool resetbuffer)
 	/* XXX begin hack */
 	{
 		FILE *log = fopen("/tmp/libpq.log", "a");
-		fprintf(log, "XXX received: ");
+		fprintf(log, "-->");
 		for (int i = 0; i < slen; ++i)
-			fprintf(log, "%02x ", inBuffer[conn->inCursor + i]);
+			fprintf(log, "%02x", inBuffer[conn->inCursor + i]);
 		fprintf(log, "\n");
 		fclose(log);
 	}
