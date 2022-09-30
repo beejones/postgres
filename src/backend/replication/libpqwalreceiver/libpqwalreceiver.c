@@ -757,12 +757,20 @@ libpqrcv_receive(WalReceiverConn *conn, char **buffer,
 	if (rawlen == 0)
 	{
 		/* Try consuming some data. */
-		if (PQconsumeInput(conn->streamConn) == 0)
+		if (PQconsumeInput(conn->streamConn) == 0) {
+			/* XXX begin hack */
+			{
+				FILE *log = fopen("/tmp/libpq.log", "a");
+				fprintf(log, "-->Error marker1: %s\n", pchomp(PQerrorMessage(conn->streamConn));
+				fclose(log);
+			}
+			/* XXX end hack */		
 			ereport(ERROR,
 					(errcode(ERRCODE_CONNECTION_FAILURE),
 					 errmsg("could not receive data from WAL stream: %s",
 							pchomp(PQerrorMessage(conn->streamConn)))));
-
+		}
+		
 		/* Now that we've consumed some input, try again */
 		rawlen = PQgetCopyData(conn->streamConn, &conn->recvBuf, 1);
 		if (rawlen == 0)
@@ -811,18 +819,33 @@ libpqrcv_receive(WalReceiverConn *conn, char **buffer,
 		else
 		{
 			PQclear(res);
+			/* XXX begin hack */
+			{
+				FILE *log = fopen("/tmp/libpq.log", "a");
+				fprintf(log, "-->Error marker2: %s\n", pchomp(PQerrorMessage(conn->streamConn));
+				fclose(log);
+			}
+			/* XXX end hack */		
 			ereport(ERROR,
 					(errcode(ERRCODE_PROTOCOL_VIOLATION),
 					 errmsg("could not receive data from WAL stream: %s",
 							pchomp(PQerrorMessage(conn->streamConn)))));
 		}
 	}
-	if (rawlen < -1)
+	if (rawlen < -1) {
+		/* XXX begin hack */
+		{
+			FILE *log = fopen("/tmp/libpq.log", "a");
+			fprintf(log, "-->Error marker3: %s\n", pchomp(PQerrorMessage(conn->streamConn));
+			fclose(log);
+		}
+		/* XXX end hack */		
 		ereport(ERROR,
 				(errcode(ERRCODE_PROTOCOL_VIOLATION),
 				 errmsg("could not receive data from WAL stream: %s",
-						pchomp(PQerrorMessage(conn->streamConn)))));
-
+					pchomp(PQerrorMessage(conn->streamConn)))));
+	}
+	
 	/* Return received messages to caller */
 	*buffer = conn->recvBuf;
 	return rawlen;
