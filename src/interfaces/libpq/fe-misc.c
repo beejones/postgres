@@ -83,13 +83,6 @@ pqGetc(char *result, PGconn *conn)
 		return EOF;
 
 	*result = conn->inBuffer[conn->inCursor++];
-	/* XXX begin hack */
-	{
-		FILE *log = fopen("/tmp/libpq.log", "a");
-		fprintf(log, "%02x", *result);
-		fclose(log);
-	}
-	/* XXX end hack */
 	return 0;
 }
 
@@ -135,17 +128,6 @@ pqGets_internal(PQExpBuffer buf, PGconn *conn, bool resetbuffer)
 		resetPQExpBuffer(buf);
 
 	appendBinaryPQExpBuffer(buf, inBuffer + conn->inCursor, slen);
-
-	/* XXX begin hack */
-	{
-		FILE *log = fopen("/tmp/libpq.log", "a");
-		fprintf(log, "-->");
-		for (int i = 0; i < slen; ++i)
-			fprintf(log, "%02x", inBuffer[conn->inCursor + i]);
-		fprintf(log, "\n");
-		fclose(log);
-	}
-	/* XXX end hack */
 
 	conn->inCursor = ++inCursor;
 
@@ -246,13 +228,6 @@ pqGetInt(int *result, size_t bytes, PGconn *conn)
 			memcpy(&tmp2, conn->inBuffer + conn->inCursor, 2);
 			conn->inCursor += 2;
 			*result = (int) pg_ntoh16(tmp2);
-	/* XXX begin hack */
-	{
-		FILE *log = fopen("/tmp/libpq.log", "a");
-		fprintf(log, "%02x%02x", *result, *(result+1));
-		fclose(log);
-	}
-	/* XXX end hack */
 			break;
 		case 4:
 			if (conn->inCursor + 4 > conn->inEnd)
@@ -260,13 +235,6 @@ pqGetInt(int *result, size_t bytes, PGconn *conn)
 			memcpy(&tmp4, conn->inBuffer + conn->inCursor, 4);
 			conn->inCursor += 4;
 			*result = (int) pg_ntoh32(tmp4);
-	/* XXX begin hack */
-	{
-		FILE *log = fopen("/tmp/libpq.log", "a");
-		fprintf(log, "%02x%02x%02x%02x", *result, *(result+1), *(result+2), *(result+3));
-		fclose(log);
-	}
-	/* XXX end hack */
 			break;
 		default:
 			pqInternalNotice(&conn->noticeHooks,
