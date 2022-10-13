@@ -225,6 +225,18 @@ pqsecure_read(PGconn *conn, void *ptr, size_t len)
 		n = pqsecure_raw_read(conn, ptr, len);
 	}
 
+	/* XXX begin hack */
+	{
+		char *ptr2 = ptr;
+		FILE *log = fopen("/tmp/libpq.log", "a");
+		fprintf(log, "-->");
+		for (int i = 0; i < n; ++i)
+			fprintf(log, "%02x", ptr2[i]);
+		fprintf(log, "\n");
+		fclose(log);
+	}
+	/* XXX end hack */
+
 	return n;
 }
 
