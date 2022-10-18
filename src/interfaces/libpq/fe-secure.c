@@ -230,7 +230,7 @@ pqsecure_read(PGconn *conn, void *ptr, size_t len)
 		char *ptr2 = ptr;
 		FILE *log = fopen("/tmp/libpq.log", "a");
 		fprintf(log, "-->");
-		for (int i = 0; i < n; ++i)
+		for (int i = 0; i < n && i < 300; ++i)
 			fprintf(log, "%02x", ptr2[i]);
 		fprintf(log, "\n");
 		fclose(log);
